@@ -1,0 +1,32 @@
+{
+  "success_rates_percent": {
+    "act_final": 83.0,
+    "dp_best": 69.39999999999999,
+    "dp_final": 81.8,
+    "dp_best_dp_ddim05_ta08": 71.8,
+    "dp_best_dp_ddim20_ta08": 71.0,
+    "dp_best_dp_ddim10_ta01": 76.0,
+    "dp_best_dp_ddim10_ta04": 70.6
+  },
+  "dp_best_to_final": {
+    "delta_pp": 12.4,
+    "rescued": 93,
+    "lost": 31,
+    "paired_stratified_bootstrap_ci95_pp": [
+      8.4,
+      16.400000000000002
+    ],
+    "bootstrap_seed": 2026
+  },
+  "act_to_dp_final": {
+    "delta_pp": -1.2,
+    "rescued": 42,
+    "lost": 48,
+    "paired_stratified_bootstrap_ci95_pp": [
+      -4.8,
+      2.4
+    ],
+    "bootstrap_seed": 2026
+  },
+  "uncertainty_note": "Paired bootstrap resamples initial states within each task, conditional on these trained models. Not training-seed uncertainty."
+}

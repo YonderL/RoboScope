@@ -1,0 +1,16 @@
+name: CPU checks
+on: [push, pull_request]
+jobs:
+  portable-results:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e '.[report,dev]'
+      - run: ruff check src tests scripts
+      - run: ruff format --check src tests scripts
+      - run: python -m pytest tests
+      - run: python -m roboscope report --output /tmp/roboscope-figures
+      - run: python scripts/build_release.py --output /tmp/roboscope-source.tar.gz

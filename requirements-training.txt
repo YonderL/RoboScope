@@ -1,0 +1,15 @@
+# Install the cu118 torch pair FIRST. Keep constraints active during all installs.
+-c constraints-lerobot.txt
+lerobot==0.6.1
+diffusers==0.39.0
+h5py==3.16.0
+numpy==2.2.6
+matplotlib==3.11.1
+PyYAML==6.0.3
+ImageIO==2.37.4
+imageio-ffmpeg==0.6.0
+# Simulator distribution used in the measured runs; assets are provided separately.
+hf-libero==0.1.4
+robosuite==1.4.0
+robomimic==0.2.0
+mujoco==3.8.1

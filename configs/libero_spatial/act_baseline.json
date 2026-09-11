@@ -1,0 +1,45 @@
+{
+  "chunks": [
+    8
+  ],
+  "seeds": [
+    0
+  ],
+  "epochs": 32,
+  "batch_size": 32,
+  "workers": 4,
+  "cpu_threads": 4,
+  "split_seed": 2026,
+  "validation_fraction": 0.1,
+  "lr": 1e-05,
+  "weight_decay": 0.0001,
+  "kl_weight": 10.0,
+  "grad_clip": 10.0,
+  "dim_model": 512,
+  "dim_feedforward": 3200,
+  "encoder_layers": 4,
+  "decoder_layers": 1,
+  "vae_layers": 4,
+  "pretrained_backbone": true,
+  "amp": true,
+  "eval_every": 8,
+  "eval_episodes": 50,
+  "eval_seed": 10000,
+  "rollout_horizon": 600,
+  "settle_steps": 5,
+  "temporal_coeff": 0.01,
+  "modes": [
+    "chunk",
+    "replan",
+    "ensemble"
+  ],
+  "video_episodes_per_task": 1,
+  "video_every": 50,
+  "keep_every_checkpoint": false,
+  "policy": "act",
+  "runtime": {
+    "image_cache": true,
+    "prefetch_cuda": true,
+    "eval_envs": 8
+  }
+}
