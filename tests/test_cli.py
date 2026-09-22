@@ -49,5 +49,11 @@ def test_worker_entrypoints_import_when_training_stack_installed():
 
     if importlib.util.find_spec("lerobot") is None:
         pytest.skip("Optional training dependencies not installed")
-    for module in ["roboscope.trainers.act", "roboscope.trainers.diffusion", "roboscope.evaluation.worker"]:
+    for module in [
+        "roboscope.trainers.act",
+        "roboscope.trainers.diffusion",
+        "roboscope.trainers.smolvla",
+        "roboscope.trainers.smolvla_rlt",
+        "roboscope.evaluation.worker",
+    ]:
         subprocess.run([sys.executable, "-m", module, "--help"], check=True, capture_output=True)

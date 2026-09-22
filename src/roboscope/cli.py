@@ -19,12 +19,31 @@ def main():
     evaluation.add_argument("--source", type=Path, required=True)
     evaluation.add_argument("--output", type=Path, required=True)
     evaluation.add_argument("--checkpoint", choices=["best", "final"], default="final")
+    evaluation.add_argument(
+        "--rlt-reference",
+        action="store_true",
+        help="Evaluate an RLT run using its frozen SFT reference at the same horizon",
+    )
     evaluation.add_argument("--episodes", type=int, default=50)
     evaluation.add_argument("--ddim-steps", type=int, choices=[5, 10, 20, 50, 100], default=10)
-    evaluation.add_argument("--ta", type=int, choices=[1, 4, 8], default=8)
+    evaluation.add_argument(
+        "--ta",
+        type=int,
+        choices=[1, 4, 8, 10, 50],
+        default=None,
+        help="Execution length: ACT/DP default 8; SmolVLA native default 50",
+    )
     for p in (training, evaluation):
         p.add_argument("--start", action="store_true")
         p.add_argument("--resume", action="store_true")
+    posttraining = sub.add_parser("posttrain", help="RLT after SmolVLA SFT (preview by default)")
+    posttraining.add_argument("--source", type=Path, required=True)
+    posttraining.add_argument("--recipe", type=Path, required=True)
+    posttraining.add_argument("--output", type=Path, required=True)
+    posttraining.add_argument("--checkpoint", choices=["best", "final"], default="final")
+    posttraining.add_argument("--stage", choices=["all", "token", "warmup", "online"], default="all")
+    posttraining.add_argument("--start", action="store_true")
+    posttraining.add_argument("--resume", action="store_true")
     report = sub.add_parser("report", help="Render figures from portable audited records; no GPU")
     report.add_argument("--data", type=Path, default=Path("results/libero_spatial"))
     report.add_argument("--output", type=Path, default=Path("docs/assets"))
@@ -33,6 +52,31 @@ def main():
         from roboscope.reporting.figures import render
 
         render(args.data, args.output)
+    elif args.command == "posttrain":
+        from roboscope.workflows.config import validate_rlt
+
+        cfg = json.loads(args.recipe.read_text())
+        validate_rlt(cfg)
+        print(
+            json.dumps(
+                {
+                    "source": str(args.source),
+                    "output": str(args.output),
+                    "checkpoint": args.checkpoint,
+                    "stage": args.stage,
+                    "recipe": cfg,
+                },
+                indent=2,
+            )
+        )
+        if args.start:
+            from roboscope.workflows.smolvla_rlt import posttrain
+
+            posttrain(args.source, args.output, cfg, args.checkpoint, args.resume, args.stage)
+        else:
+            print(
+                "Preview only; pass --start for token training and LIBERO rollout RL. No checkpoint loaded."
+            )
     elif args.command == "train":
         cfg = json.loads(args.recipe.read_text())
         from roboscope.workflows.config import validate_recipe
@@ -65,6 +109,7 @@ def main():
                 args.ddim_steps,
                 args.ta,
                 args.resume,
+                args.rlt_reference,
             )
         else:
             print("Preview only; pass --start to evaluate. No checkpoint loaded.")

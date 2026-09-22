@@ -1,5 +1,8 @@
 # Local experiments and benchmark assets are never source release material.
 outputs/
+.cache/
+.backups/
+datasets/
 logs/
 analysis/
 LIBERO/

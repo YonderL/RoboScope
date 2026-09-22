@@ -4,9 +4,15 @@
 
 [English](README.md) · [环境与复现命令](docs/quickstart.md) · [架构](docs/architecture.md) · [实验配置](docs/experiments.md) · [研究分析](docs/findings.md)
 
-当前实现：LIBERO-Spatial 上的多任务 ACT、Diffusion Policy，以及 action chunking、temporal ensemble、DDIM 步数、执行 horizon 和 checkpoint 选择分析。一个模型覆盖十个任务，条件是 task ID，不是自然语言。
+当前实现：LIBERO-Spatial 上的多任务 ACT、Diffusion Policy，以及 action chunking、temporal ensemble、DDIM 步数、执行 horizon 和 checkpoint 选择分析。ACT/DP 使用 task ID 条件。新增的 **Pi-0 LoRA** 使用真实语言指令，支持两张4090同步微调、断点恢复、独立闭环评测及指标保存；实现与实测范围见 [Pi-0 方案和一键运行说明](docs/pi0_lora_spatial.md)，尚不宣称其基准成功率。
 
 ![ACT与DP比较](docs/assets/act_vs_dp.png)
+
+**SmolVLA** 已接入：使用官方 base 微调设置，训练与推理均保留 50 步动作块，评测复用 ACT/DP 的 10 任务 × 50 固定初态协议。可用 `bash scripts/train_smolvla_spatial.sh --preview` 预览；配置、训练评测命令及验证范围见 [SmolVLA 运行说明](docs/smolvla_spatial.md)。尚未运行完整 GPU 基准，不报告成功率。
+
+**SmolVLA RLT 后训练** 已接入：冻结 SFT，通过 RL token 重建、Gaussian actor 和双 critic，使用 LIBERO-Spatial rollout 填充 replay。RLT 每次执行 10 步，增加 SFT 10 步配对对照，原 SFT 保留 50 步。可用 `bash scripts/posttrain_smolvla_rlt_spatial.sh --preview` 预览，详见 [RLT 运行说明](docs/smolvla_rlt_spatial.md)。真实仿真短测试已通过，成功率增益尚未测量。
+
+支持 [分阶段执行](docs/smolvla_rlt_spatial.md#按阶段执行)：SFT → `--stage token` → `--stage warmup` → `--stage online` → `--stage evaluate`。先冻结 RL token 再保存特征 replay；在线阶段持续采集新轨迹并更新策略。
 
 | 配置 | 成功率 | 测试量 |
 |---|---:|---:|
@@ -38,8 +44,8 @@ python -m pytest tests/test_results.py tests/test_cli.py
 
 ## 开发方向
 
-代码已分为 `data / policies / envs / trainers / evaluation / runtime / workflows / reporting`，参考 verl-vla 的职责分离方式。后续 π 系列、RL 后训练、其他仿真器通过对应模块接入。
+代码已分为 `data / policies / envs / trainers / evaluation / runtime / workflows / reporting`，参考 verl-vla 的职责分离方式。Pi-0 LoRA 已通过对应模块接入，可先运行 `bash scripts/train_pi0_lora_spatial.sh --preview` 查看配置。
 
-**这些扩展尚未实现，当前不宣称支持 VLA fine-tuning、PPO、RTC 或跨 benchmark 训练。** 优先完成可验证的 ACT/DP 研究，再扩展新能力。[路线图](docs/roadmap.md)
+**PPO、RTC 或跨 benchmark 训练尚未实现。** 新增能力的代码验证与完整训练成绩分别记录。[路线图](docs/roadmap.md)
 
 原实验目录与权重在本地保留；对外源码包只包含规范代码、配置、文档和轻量结果。重构后的必要验证与尚未完成的整套重跑分别记录在 [validation](docs/validation.md)。

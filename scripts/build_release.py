@@ -15,6 +15,8 @@ FILES = [
     "CONTRIBUTING.md",
     ".gitignore",
     "requirements-training.txt",
+    "requirements-smolvla.txt",
+    "requirements-pi0.txt",
     "constraints-lerobot.txt",
 ]
 DIRS = ["src", "configs", "docs", "examples", "tests", "scripts", "results", ".github"]

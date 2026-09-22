@@ -36,9 +36,10 @@ def env_worker(connection, cfg, directory, slot):
             command, payload = connection.recv()
             if command == "close":
                 break
-            if command == "reset":
+            if command in ("reset", "reset_training"):
                 task, initial_id, video_path = payload
-                episode_seed = cfg["eval_seed"] + task["id"] * 1000 + initial_id
+                training = command == "reset_training"
+                episode_seed = initial_id if training else cfg["eval_seed"] + task["id"] * 1000 + initial_id
                 random.seed(episode_seed)
                 np.random.seed(episode_seed)
                 if task_name != task["name"]:
@@ -61,7 +62,7 @@ def env_worker(connection, cfg, directory, slot):
                             getattr(env.env.robots[0].controller, key), task["controller"][key]
                         ):
                             raise RuntimeError(f"Controller {key} mismatch")
-                if task_name not in initial_states:
+                if not training and task_name not in initial_states:
                     initial_states[task_name] = torch.load(
                         task["init"], map_location="cpu", weights_only=False
                     )
@@ -69,8 +70,9 @@ def env_worker(connection, cfg, directory, slot):
                 random.seed(episode_seed)
                 np.random.seed(episode_seed)
                 env.seed(episode_seed)
-                env.reset()
-                obs = env.set_init_state(np.asarray(initial_states[task_name][initial_id]))
+                obs = env.reset()
+                if not training:
+                    obs = env.set_init_state(np.asarray(initial_states[task_name][initial_id]))
                 for _ in range(cfg["settle_steps"]):
                     obs, _, _, _ = env.step(np.zeros(7))
                 steps = 0

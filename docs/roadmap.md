@@ -5,8 +5,8 @@
 | ACT / DP on LIBERO-Spatial | Implemented; measured in archived runs | Audited per-episode results, matched comparison, documented limitations |
 | Package migration | Implemented; bounded validation | No dependency on local experiment scripts; model/data parity checks; source release builds |
 | Stronger evaluation protocol | Planned | Fixed batch replay check, failure annotations, development/test initial-state separation, additional training seeds |
-| π-series supervised fine-tuning | Planned | Real language-conditioned adapter, correct action units, optimizer/checkpoint recipe, bounded gradient and rollout tests, published baseline |
-| VLA RL post-training | Planned | Explicit algorithm/action likelihood semantics, policy-versioned trajectories, reward/termination contract, IL vs RL matched evaluation |
+| Pi-0 LoRA supervised fine-tuning | Pipeline implemented; pretrained full-run validation pending asset download | [Two-4090 runbook](pi0_lora_spatial.md); real language inputs, separate EEF state adapter, resumable DDP and fixed-init evaluation; no measured baseline claimed |
+| SmolVLA RLT post-training | Implemented; unit and bounded GPU/LIBERO validation; full training pending | [RLT runbook](smolvla_rlt_spatial.md); frozen SFT, learned readout, direct Gaussian actor/twin critic, rollout replay and resumable training; matched C=10 SFT/RLT evaluation, no measured gain claimed |
 | ManiSkill3 / RoboCasa | Planned | Benchmark-specific adapters and documented equivalence boundaries, independent reproducible baseline |
 | Agentic manipulation / RTC | Planned | High-level skill contract, verification/replanning tests, actual asynchronous latency/robustness study |
 

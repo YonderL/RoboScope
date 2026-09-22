@@ -47,3 +47,9 @@ ACT chunk executes K steps per prediction; replan executes the newest first acti
 DP validation: every 1,000 updates, 1,024 fixed validation anchors, fixed noise. Best noise MSE occurred at7k; final30k achieved higher SR. The recipe retains both labels to make the discrepancy reproducible. No final-checkpoint inference sweep has yet been reported.
 
 Each evaluation worker holds one policy; 8 simulator processes per GPU. DP evaluation splits even/odd task IDs between two 4090s. Latency: batch1, five warmups and 30 measurements per card; public plots pool the 60 raw timing samples and show their median. Different checkpoint timings were measured in different sessions, so small differences need not be model effects.
+
+## SmolVLA extension
+
+The [SmolVLA recipe](smolvla_spatial.md) uses the same shared evaluator, 500 fixed-state trials, seeds, cameras, 600-step budget, settling, simulator parallelism and latency sampling. It retains native 50-step action execution and official base fine-tuning presets (effective batch 64, 20k updates), with natural-language task conditioning. The ACT/DP execution length remains 8. SmolVLA results have not yet been measured; the published tables above remain the ACT/DP study.
+
+The [SmolVLA RLT recipe](smolvla_rlt_spatial.md) adds post-training with frozen SFT features and rollout-only replay. It executes 10 actions per prediction and evaluates both its actor and a frozen SFT 10-step control with the same 500-episode protocol. Compare those two to isolate the effect of RL; retain the original 50-step SFT result separately. Real LIBERO smoke tests validate the collection/update path, but full post-training and success-rate comparisons remain pending.

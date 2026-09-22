@@ -4,7 +4,7 @@
 
 [中文](README.zh-CN.md) · [Quick start](docs/quickstart.md) · [Architecture](docs/architecture.md) · [Experiments](docs/experiments.md) · [Research findings](docs/findings.md) · [Reproduction](docs/reproducibility.md)
 
-RoboScope implements suite-conditioned **ACT and Diffusion Policy on LIBERO-Spatial**, with fixed-initial-state evaluation, action-execution ablations, per-episode records, and reproducible figures. It is a research project: results and limitations are reported together.
+RoboScope implements suite-conditioned **ACT and Diffusion Policy on LIBERO-Spatial**, with fixed-initial-state evaluation, action-execution ablations, per-episode records, and reproducible figures. It also provides a **language-conditioned Pi-0 LoRA fine-tuning pipeline for two RTX 4090s**; see the [Pi-0 runbook and validation limits](docs/pi0_lora_spatial.md). It is a research project: results and limitations are reported together.
 
 ![ACT and DP comparison](docs/assets/act_vs_dp.png)
 
@@ -29,7 +29,15 @@ Same seed 0, ten tasks, 50 fixed initial states per task, two RGB cameras, 7D OS
 - **Evidence:** 3,500 portable episode records for the ACT–DP study, checkpoint hashes, task/init identities, training history, and CPU-only figure regeneration. Historical ACT curves retain their separate three-seed / 20-episode protocol.
 - **Runtime:** two RTX 4090s selected by UUID, matched to EGL via PCI address; isolated output directories and source snapshots.
 
-**Not implemented:** π-series fine-tuning, PPO or other RL post-training, asynchronous/RTC inference, ManiSkill/RoboCasa, and language-conditioned policies. These are [planned extensions](docs/roadmap.md), not current benchmark claims. Checkpoints and demonstration data are not bundled.
+**Pi-0 LoRA:** native PyTorch adapters, synchronous two-GPU DDP, trajectory validation, resumable adapter checkpoints, and separate fixed-state LIBERO evaluation. Start with `bash scripts/train_pi0_lora_spatial.sh --preview`; the [runbook](docs/pi0_lora_spatial.md) records prerequisites and what has actually been verified. No Pi-0 benchmark score is claimed here.
+
+**SmolVLA:** fine-tune the official base with its native training presets and 50-step action execution, using the shared ACT/DP 500-episode evaluation. Start with `bash scripts/train_smolvla_spatial.sh --preview`; see the [settings, commands and validation limits](docs/smolvla_spatial.md). No SmolVLA benchmark score is claimed here.
+
+**SmolVLA RLT post-training:** a learned RL token and Gaussian actor/twin critic use LIBERO-Spatial rollout replay with a frozen SFT backbone. RLT executes 10 steps and adds a matched SFT 10-step baseline; the original SFT stays at 50. See the [RLT runbook](docs/smolvla_rlt_spatial.md), or preview with `bash scripts/posttrain_smolvla_rlt_spatial.sh --preview`. Bounded simulator tests pass; success-rate gains have not been measured.
+
+Run the stages separately with `--stage token`, `--stage warmup`, `--stage online`, and `--stage evaluate`. Freeze the RL token before collecting feature replay; online learning continues collecting new rollouts. See the [step-by-step commands](docs/smolvla_rlt_spatial.md#按阶段执行).
+
+**Not implemented:** PPO, asynchronous/RTC inference, and ManiSkill/RoboCasa. These are [planned extensions](docs/roadmap.md), not current benchmark claims. Checkpoints and demonstration data are not bundled.
 
 ## Reproduce the figures first
 

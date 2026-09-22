@@ -61,6 +61,14 @@ def lock_run(run):
 
 def train(cfg, resume=False):
     """ACT schedules independent K/seed runs; DP trains one suite-conditioned model."""
+    if cfg["policy"] == "smolvla":
+        from roboscope.workflows.smolvla import train_smolvla
+
+        return train_smolvla(cfg, resume)
+    if cfg["policy"] == "pi0_lora":
+        from roboscope.workflows.pi0 import train_pi0
+
+        return train_pi0(cfg, resume)
     from roboscope.data.cache import prepare_cache
     from roboscope.data.libero import prepare, save_json
     from roboscope.runtime.gpu import cards_and_envs, run_workers
@@ -116,10 +124,11 @@ def train(cfg, resume=False):
         lock.close()
 
 
-def evaluation_config(source, checkpoint, episodes, ddim_steps, ta):
+def evaluation_config(source, checkpoint, episodes, ddim_steps, ta, rlt_reference=False):
     """Separate evaluation outputs permit comparing checkpoints without overwriting runs."""
     source = Path(source).resolve()
     if (source / "run.json").exists():
+        ta = 8 if ta is None else ta
         spec = json.loads((source / "run.json").read_text())
         if spec["chunk"] != 8:
             raise ValueError(
@@ -145,9 +154,31 @@ def evaluation_config(source, checkpoint, episodes, ddim_steps, ta):
         if (source / "env_config.json").exists():
             environment = json.loads((source / "env_config.json").read_text())
             cfg = {**environment, **cfg}
-        cfg["policy"] = "diffusion"
         manifest = json.loads((source / "manifest.json").read_text())
-        variant = f"dp_ddim{ddim_steps:02d}_ta{ta:02d}"
+        if cfg.get("policy") == "smolvla_rlt":
+            if checkpoint != "final":
+                raise ValueError(
+                    "RLT does not select checkpoints on evaluation successes; use --checkpoint final"
+                )
+            ta = cfg["action_horizon"] if ta is None else ta
+            if ta != cfg["action_horizon"] or ddim_steps != 10:
+                raise ValueError("RLT must use its trained action horizon; DDIM overrides do not apply")
+            cfg["evaluation_policy"] = "sft_reference" if rlt_reference else "rlt"
+            label = "reference" if rlt_reference else "rlt"
+            variant = f"smolvla_{label}_c{ta:03d}"
+        elif cfg.get("policy") == "smolvla":
+            ta = cfg["action_horizon"] if ta is None else ta
+            if ta != 50 or ddim_steps != 10:
+                raise ValueError("SmolVLA uses native --ta 50 and flow sampling; --ddim-steps is a DP option")
+            variant = "smolvla_chunk50"
+        else:
+            cfg["policy"] = "diffusion"
+            ta = 8 if ta is None else ta
+            if ta not in (1, 4, 8):
+                raise ValueError("DP --ta must be 1, 4 or 8")
+            variant = f"dp_ddim{ddim_steps:02d}_ta{ta:02d}"
+    if rlt_reference and cfg["policy"] != "smolvla_rlt":
+        raise ValueError("--rlt-reference requires a SmolVLA RLT run")
     cfg.update(
         eval_episodes=episodes,
         evaluation_checkpoint=checkpoint,
@@ -161,13 +192,24 @@ def evaluation_config(source, checkpoint, episodes, ddim_steps, ta):
     return cfg, manifest, variant
 
 
-def evaluate(source, output, checkpoint="final", episodes=50, ddim_steps=10, ta=8, resume=False):
+def evaluate(
+    source, output, checkpoint="final", episodes=50, ddim_steps=10, ta=None, resume=False, rlt_reference=False
+):
+    config_path = Path(source) / "config.json"
+    if config_path.exists() and json.loads(config_path.read_text()).get("policy") == "pi0_lora":
+        if rlt_reference:
+            raise ValueError("--rlt-reference requires a SmolVLA RLT run")
+        if ddim_steps != 10 or ta not in (None, 8):
+            raise ValueError("--ddim-steps and --ta are DP options; Pi-0 uses its saved flow/action horizons")
+        from roboscope.workflows.pi0 import evaluate_pi0
+
+        return evaluate_pi0(source, output, checkpoint, episodes, resume)
     import torch
 
     from roboscope.data.libero import save_json
     from roboscope.runtime.gpu import cards_and_envs, run_workers
 
-    cfg, manifest, variant = evaluation_config(source, checkpoint, episodes, ddim_steps, ta)
+    cfg, manifest, variant = evaluation_config(source, checkpoint, episodes, ddim_steps, ta, rlt_reference)
     run = Path(output).resolve()
     cfg["output_root"] = str(run)
     # Fail before recording an invalid initial-state schedule.

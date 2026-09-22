@@ -40,6 +40,18 @@ def atomic_save(path, value):
 
 
 def variants(cfg):
+    if cfg.get("policy") == "smolvla_rlt":
+        label = "reference" if cfg.get("evaluation_policy") == "sft_reference" else "rlt"
+        return [
+            {
+                "name": f"smolvla_{label}_c{cfg['action_horizon']:03d}",
+                "model": "rlt",
+                "ta": cfg["action_horizon"],
+                "ddim_steps": 0,
+            }
+        ]
+    if cfg.get("policy") == "smolvla":
+        return [{"name": "smolvla_chunk50", "model": "smolvla", "ta": 50, "ddim_steps": 0}]
     pairs = {(n, cfg["action_horizon"]) for n in cfg["ddim_ablation"]}
     pairs |= {(cfg["ddim_steps"], ta) for ta in cfg["action_horizon_ablation"]}
     return [

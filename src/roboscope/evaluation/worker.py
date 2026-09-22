@@ -1,4 +1,4 @@
-"""Shared 50-fixed-state ACT/DP evaluation, with independent per-episode histories and RNG."""
+"""Shared fixed-state ACT/DP/SmolVLA evaluation with per-episode histories and RNG."""
 
 import argparse
 import json
@@ -31,7 +31,20 @@ def batch_observations(slots, kind, device="cuda"):
 
 
 def load_policy(run, cfg, manifest, env_cfg, variant):
-    if variant["model"] == "dp":
+    if variant["model"] == "rlt":
+        from roboscope.policies.smolvla_rlt import load_policy as load_rlt
+
+        path = run / (cfg["evaluation_checkpoint"] + ".pt")
+        model, step = load_rlt(path, manifest, cfg, "cuda")
+    elif variant["model"] == "smolvla":
+        from roboscope.policies.smolvla import SmolVLAPolicy
+
+        path = run / (cfg["evaluation_checkpoint"] + ".pt")
+        ckpt = torch.load(path, map_location="cpu", weights_only=False)
+        model = SmolVLAPolicy(ckpt["config"], manifest, initialize_pretrained=False)
+        model.load_state_dict(ckpt["model"], strict=True)
+        step = ckpt["step"]
+    elif variant["model"] == "dp":
         path = run / (cfg["evaluation_checkpoint"] + ".pt")
         ckpt = torch.load(path, map_location="cpu", weights_only=False)
         model = TaskDiffusionPolicy(cfg, manifest)
@@ -59,7 +72,7 @@ def latency(model, variant, cfg, manifest, cache):
     ds = SequenceDataset(manifest, "val", cache)
     sample = ds[0]
     batch = {k: v.unsqueeze(0).cuda() for k, v in sample.items() if k not in ("action", "action_is_pad")}
-    if variant["model"] == "act":
+    if variant["model"] != "dp":
         for key in ("state", *CAMERAS):
             batch[key] = batch[key][:, -1]
     times = []
@@ -192,12 +205,21 @@ def rollout(model, cfg, env_cfg, jobs, variant, target, callback):
             if query:
                 items = [active[s] for s in query]
                 batch = batch_observations(items, variant["model"])
+                if variant["model"] == "rlt":
+                    batch["remaining_steps"] = torch.tensor(
+                        [cfg["rollout_horizon"] - item["steps"] for item in items], device="cuda"
+                    )
                 with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16, enabled=cfg["amp"]):
                     if variant["model"] == "dp":
                         noise = torch.stack(
                             [torch.randn(16, 7, device="cuda", generator=s["generator"]) for s in items]
                         )
                         predicted = model.predict(batch, variant["ddim_steps"], noise=noise)
+                    elif variant["model"] in ("smolvla", "rlt"):
+                        noise = torch.stack(
+                            [torch.randn(50, 32, device="cuda", generator=s["generator"]) for s in items]
+                        )
+                        predicted = model.predict(batch, noise=noise)
                     else:
                         predicted = model.predict(batch)
                 chunks = predicted[:, : variant["ta"]].float().cpu().numpy()

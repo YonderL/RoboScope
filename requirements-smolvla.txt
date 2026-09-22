@@ -1,0 +1,3 @@
+# Install after requirements-training.txt in the same constrained environment.
+-c constraints-lerobot.txt
+lerobot[smolvla]==0.6.1
