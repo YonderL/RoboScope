@@ -4,15 +4,37 @@
 
 [English](README.md) · [环境与复现命令](docs/quickstart.md) · [架构](docs/architecture.md) · [实验配置](docs/experiments.md) · [研究分析](docs/findings.md)
 
-当前实现：LIBERO-Spatial 上的多任务 ACT、Diffusion Policy，以及 action chunking、temporal ensemble、DDIM 步数、执行 horizon 和 checkpoint 选择分析。ACT/DP 使用 task ID 条件。另外两条语言条件路线单独记录：官方数据上的 SmolVLA，以及 HF Spatial 上的 Pi-0 LoRA。它们的图像、状态和回合协议与下方 ACT/DP 表不同，不并入该比较。
+当前实现：LIBERO-Spatial 上的多任务 ACT、Diffusion Policy，以及官方数据上的 SmolVLA 和 HF Spatial 上的 Pi-0 LoRA。下面按任务名对齐四个方法的闭环成功率。ACT/DP 用 HDF5 任务顺序，SmolVLA 用原生顺序（「ramekin 上的黑碗」是原生 T5、HDF5/Pi-0 的 T7）。
 
 ![ACT与DP比较](docs/assets/act_vs_dp.png)
 
-**SmolVLA（官方 Spatial 协议）**：论文架构、256×256 官方数据、8D 末端状态、100k 更新、seed 0。每次执行 10 步的闭环结果是 **411/500（82.2%）**；同一权重每任务 10 回合为 81/100。训练中的周期评测是每步重规划，成绩在 68%–73%（100 回合），与 82.2% 不是同一个协议。配方见 [smolvla_official.json](configs/libero_spatial/smolvla_official.json)，说明见 [smolvla_official_spatial.md](docs/smolvla_official_spatial.md)。
+## 当前闭环成绩
+
+每一格是 50 次固定试验中的成功次数。
+
+| 任务 | ACT | DP | SmolVLA | Pi-0 |
+|---|---:|---:|---:|---:|
+| 盘子和 ramekin 之间 | 42/50 | 48/50 | 47/50 | 50/50 |
+| 桌面中央 | 48/50 | 50/50 | 49/50 | 49/50 |
+| 木柜顶层抽屉 | 45/50 | 45/50 | 44/50 | 46/50 |
+| 饼干盒旁边 | 48/50 | 47/50 | 49/50 | 47/50 |
+| 盘子旁边 | 38/50 | 35/50 | 38/50 | 37/50 |
+| ramekin 旁边 | 41/50 | 49/50 | 47/50 | 42/50 |
+| 饼干盒上面 | 46/50 | 47/50 | 45/50 | 45/50 |
+| ramekin 上面 | 34/50 | 37/50 | 47/50 | 42/50 |
+| 炉子上面 | 43/50 | 44/50 | 42/50 | 38/50 |
+| 木柜上面 | 49/50 | 42/50 | 40/50 | 42/50 |
+| **全套** | **434/500（86.8%）** | **444/500（88.8%）** | **448/500（89.6%）** | **438/500（87.6%）** |
+
+ACT 是 K=8、epoch 32 的 chunk 执行。DP 是 30k final，DDIM=10、Ta=8。SmolVLA 是 100k 官方 Spatial checkpoint，每次执行 10 步。Pi-0 是 30k HF Spatial LoRA，每次执行 8 步，十个任务都在 MuJoCo 3.3.2 上评测。
+
+「ramekin 上面」这一行，ACT、DP、SmolVLA 用的是 PRO 5000 上 MuJoCo 3.3.2 的复测；它们另外九个任务仍是此前已发布的成绩。图像尺寸、本体状态和回合上限并不相同，因此这是当前成绩并列，不是同一协议的对照实验。
+
+**SmolVLA（官方 Spatial 协议）**：论文架构、256×256 官方数据、8D 末端状态、100k 更新、seed 0。把「ramekin 上面」换成 MuJoCo 3.3.2 复测（47/50，该任务原先 10/50）后，全套是 **448/500（89.6%）**。训练中的周期评测是每步重规划，成绩在 68%–73%（100 回合），与上表不是同一个协议。配方见 [smolvla_official.json](configs/libero_spatial/smolvla_official.json)，说明见 [smolvla_official_spatial.md](docs/smolvla_official_spatial.md)。
 
 ![SmolVLA 原生评测](docs/assets/smolvla_evaluation.png)
 
-**Pi-0 LoRA（HF Spatial）**：30k 更新，seed 0。发布内容是下图中的训练损失和留出轨迹损失，没有完整闭环分数。配方见 [pi0_lora_hf_spatial.json](configs/libero_spatial/pi0_lora_hf_spatial.json)。旧的 HDF5 [Pi-0 说明](docs/pi0_lora_spatial.md) 是另一条路径。
+**Pi-0 LoRA（HF Spatial）**：30k 更新，seed 0，MuJoCo 3.3.2 上每任务 50 回合。闭环成功率是 **438/500（87.6%）**。下图是训练损失。配方见 [pi0_lora_hf_spatial.json](configs/libero_spatial/pi0_lora_hf_spatial.json)。旧的 HDF5 [Pi-0 说明](docs/pi0_lora_spatial.md) 不是上表中的成绩。
 
 ![VLA 训练记录](docs/assets/vla_training.png)
 
@@ -20,11 +42,7 @@
 
 支持 [分阶段执行](docs/smolvla_rlt_spatial.md#按阶段执行)：SFT → `--stage token` → `--stage warmup` → `--stage online` → `--stage evaluate`。先冻结 RL token 再保存特征 replay；在线阶段持续采集新轨迹并更新策略。
 
-| 配置 | 成功率 | 测试量 |
-|---|---:|---:|
-| ACT，K=8，epoch32，chunk | **83.0%** | 415/500 |
-| DP，final 30k，DDIM10 / Ta8 | **81.8%** | 409/500 |
-| DP，验证 noise MSE 最优 7k，同推理配置 | 69.4% | 347/500 |
+原先匹配的 ACT/DP 研究（尚未替换 ramekin 复测）是：ACT 415/500（83.0%），DP final 409/500（81.8%），DP 验证损失最低的 7k checkpoint 347/500（69.4%）。
 
 两组策略共享数据划分、物理动作与评测协议；视觉预训练、裁剪、观察历史、归一化和训练预算不同。因此这是策略方案比较，不是仅架构变化的单因素实验。
 

@@ -8,7 +8,31 @@ RoboScope implements suite-conditioned **ACT and Diffusion Policy on LIBERO-Spat
 
 ![ACT and DP comparison](docs/assets/act_vs_dp.png)
 
+## Current closed-loop scores
+
+Each cell is successes out of 50 fixed trials. Rows are the same LIBERO-Spatial task, matched by name. ACT and DP use their HDF5 task order; SmolVLA uses the native benchmark order, where “on the ramekin” is task 5 rather than task 7. Pi-0 uses the same names as ACT and DP.
+
+| Task | ACT | DP | SmolVLA | Pi-0 |
+|---|---:|---:|---:|---:|
+| Between plate and ramekin | 42/50 | 48/50 | 47/50 | 50/50 |
+| Table center | 48/50 | 50/50 | 49/50 | 49/50 |
+| Top drawer | 45/50 | 45/50 | 44/50 | 46/50 |
+| Next to cookie box | 48/50 | 47/50 | 49/50 | 47/50 |
+| Next to plate | 38/50 | 35/50 | 38/50 | 37/50 |
+| Next to ramekin | 41/50 | 49/50 | 47/50 | 42/50 |
+| On cookie box | 46/50 | 47/50 | 45/50 | 45/50 |
+| On the ramekin | 34/50 | 37/50 | 47/50 | 42/50 |
+| On the stove | 43/50 | 44/50 | 42/50 | 38/50 |
+| On the wooden cabinet | 49/50 | 42/50 | 40/50 | 42/50 |
+| **Suite** | **434/500 (86.8%)** | **444/500 (88.8%)** | **448/500 (89.6%)** | **438/500 (87.6%)** |
+
+ACT is K=8 chunk execution at epoch 32. DP is the 30k final checkpoint, DDIM=10, Ta=8. SmolVLA is the 100k official Spatial checkpoint, executing 10 of 50 predicted actions. Pi-0 is the 30k HF Spatial LoRA checkpoint, executing 8 actions, on MuJoCo 3.3.2 for every task.
+
+The “on the ramekin” row is the MuJoCo 3.3.2 re-evaluation on PRO 5000s for ACT, DP, and SmolVLA. Their other nine tasks stay on the earlier published runs. Pi-0’s whole table is the new MuJoCo 3.3.2, 256px, 8D-state evaluation. Image size, proprioception, and rollout budget still differ, so this is a side-by-side of the current scores, not one shared protocol.
+
 ## Results that changed our interpretation
+
+The original matched ACT/DP study, before the ramekin re-evaluation above:
 
 | Policy | Checkpoint | Success / 500 | SR | Inference p50 |
 |---|---|---:|---:|---:|
@@ -29,11 +53,11 @@ Same seed 0, ten tasks, 50 fixed initial states per task, two RGB cameras, 7D OS
 - **Evidence:** 3,500 portable episode records for the ACT–DP study, checkpoint hashes, task/init identities, training history, and CPU-only figure regeneration. Historical ACT curves retain their separate three-seed / 20-episode protocol.
 - **Runtime:** two RTX 4090s selected by UUID, matched to EGL via PCI address; isolated output directories and source snapshots.
 
-**SmolVLA, official Spatial protocol:** paper architecture on the released 256×256 dataset, 8D end-effector state, 100k updates, seed 0. Executing 10 of 50 predicted actions scores **411/500 (82.2%)**. A 10-trial/task pass of the same checkpoint is 81/100. In-training rollouts replan every step and are a different number (68–73% on 100 episodes). Recipe: [smolvla_official.json](configs/libero_spatial/smolvla_official.json). This is not comparable to the ACT/DP table above.
+**SmolVLA, official Spatial protocol:** paper architecture on the released 256×256 dataset, 8D end-effector state, 100k updates, seed 0. Executing 10 of 50 predicted actions scores **448/500 (89.6%)** after replacing the “on the ramekin” task with the MuJoCo 3.3.2 re-evaluation (47/50; the earlier run of that task was 10/50). In-training rollouts replan every step and are a different number (68–73% on 100 episodes). Recipe: [smolvla_official.json](configs/libero_spatial/smolvla_official.json). Per-task scores are in the table above.
 
 ![SmolVLA native evaluation](docs/assets/smolvla_evaluation.png)
 
-**Pi-0 LoRA, HF Spatial:** 30k updates on two GPUs, seed 0. The published record is the training and held-out loss curve in the figure below. No full closed-loop score is included. Recipe: [pi0_lora_hf_spatial.json](configs/libero_spatial/pi0_lora_hf_spatial.json). The older HDF5 [Pi-0 runbook](docs/pi0_lora_spatial.md) is a separate path.
+**Pi-0 LoRA, HF Spatial:** 30k updates, seed 0, evaluated for 50 trials on every task under MuJoCo 3.3.2. Closed-loop success is **438/500 (87.6%)**. The training curve is below. Recipe: [pi0_lora_hf_spatial.json](configs/libero_spatial/pi0_lora_hf_spatial.json). The older HDF5 [Pi-0 runbook](docs/pi0_lora_spatial.md) is a separate path and is not the score in the table.
 
 ![VLA training evidence](docs/assets/vla_training.png)
 
@@ -64,12 +88,12 @@ src/roboscope/
   envs/          # LIBERO setup, observation adapter, spawned environment pool
   trainers/      # behavior cloning, diffusion, official SmolVLA, Pi-0, RLT
   evaluation/    # matched ACT–DP protocol and HF Pi-0 closed-loop adapter
-  runtime/       # GPU/EGL binding, shared training loop, worker supervision
+  runtime/       # GPU/EGL binding, checkpoint/RNG utilities, worker supervision
   workflows/     # one entry per recipe family; no shared loss formulas
   reporting/     # ACT/DP paired audit and a separate native VLA audit
 configs/         # path-independent scientific recipes
 examples/        # complete command sequences
-results/         # portable records only: libero_spatial/ and vla_spatial/
+results/         # baseline, VLA training, and MuJoCo 3.3.2 follow-up records
 scripts/         # export, train entrypoints, release allowlist
 ```
 
