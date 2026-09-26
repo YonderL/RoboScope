@@ -13,7 +13,7 @@ def posttrain(source, output, cfg, checkpoint="final", resume=False, stage="all"
     from roboscope.data.cache import prepare_cache
     from roboscope.data.libero import digest, save_json
     from roboscope.runtime.gpu import cards_and_envs, run_workers
-    from roboscope.trainers.pi0 import manifest_digest
+    from roboscope.runtime.training import manifest_digest
 
     source, output = Path(source).resolve(), Path(output).resolve()
     if source == output:

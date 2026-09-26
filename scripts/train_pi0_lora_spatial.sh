@@ -1,39 +1,39 @@
 #!/usr/bin/env bash
-# Run from any directory. Defaults match kty-ly; all paths can be overridden.
+# Run from any directory. All paths can be overridden through the environment.
 set -euo pipefail
 PROJECT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-PYTHON="${PYTHON:-/home/liuyang/miniconda3/envs/lerobot/bin/python}"
-DATA_ROOT="${DATA_ROOT:-/data/liuyang/robot_learning}"
+PYTHON="${PYTHON:-python}"
+DATA_ROOT="${DATA_ROOT:-${PROJECT_ROOT}/datasets}"
 LIBERO_ROOT="${LIBERO_ROOT:-${PROJECT_ROOT}/LIBERO/libero/libero}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-${PROJECT_ROOT}/outputs/pi0_lora_spatial_seed0}"
 RECIPE="${RECIPE:-${PROJECT_ROOT}/configs/libero_spatial/pi0_lora.json}"
-preview=0
+preview=1
 smoke=0
 skip_eval=0
 resume_args=()
 while (($#)); do
   case "$1" in
     --preview) preview=1 ;;
+    --start) preview=0 ;;
     --smoke) smoke=1 ;;
     --resume) resume_args=(--resume) ;;
     --skip-eval) skip_eval=1 ;;
     --output) OUTPUT_ROOT="${2:?--output requires a path}"; shift ;;
     --help|-h)
-      echo "Usage: bash scripts/train_pi0_lora_spatial.sh [--preview] [--smoke] [--resume] [--skip-eval] [--output DIR]"
+      echo "Usage: bash scripts/train_pi0_lora_spatial.sh [--start|--preview] [--smoke] [--resume] [--skip-eval] [--output DIR]"
       echo "Environment: PYTHON DATA_ROOT LIBERO_ROOT OUTPUT_ROOT RECIPE PI0_BASE_PATH PI0_TOKENIZER_PATH HF_ENDPOINT"
       exit 0 ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
   shift
 done
-if [[ ! -x "$PYTHON" ]]; then
+if ! command -v "$PYTHON" >/dev/null 2>&1; then
   echo "Python not found: $PYTHON. Set PYTHON to the existing LeRobot 0.6.1 environment." >&2
   exit 1
 fi
 if ((smoke)); then OUTPUT_ROOT="${OUTPUT_ROOT}_smoke"; fi
 export PYTHONPATH="${PROJECT_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 export TOKENIZERS_PARALLELISM=false
-export HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
 export HF_HUB_DOWNLOAD_TIMEOUT="${HF_HUB_DOWNLOAD_TIMEOUT:-120}"
 export HF_HUB_ETAG_TIMEOUT="${HF_HUB_ETAG_TIMEOUT:-30}"
 export HF_HUB_DISABLE_XET="${HF_HUB_DISABLE_XET:-1}"

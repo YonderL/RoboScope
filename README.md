@@ -29,11 +29,15 @@ Same seed 0, ten tasks, 50 fixed initial states per task, two RGB cameras, 7D OS
 - **Evidence:** 3,500 portable episode records for the ACT–DP study, checkpoint hashes, task/init identities, training history, and CPU-only figure regeneration. Historical ACT curves retain their separate three-seed / 20-episode protocol.
 - **Runtime:** two RTX 4090s selected by UUID, matched to EGL via PCI address; isolated output directories and source snapshots.
 
-**Pi-0 LoRA:** native PyTorch adapters, synchronous two-GPU DDP, trajectory validation, resumable adapter checkpoints, and separate fixed-state LIBERO evaluation. Start with `bash scripts/train_pi0_lora_spatial.sh --preview`; the [runbook](docs/pi0_lora_spatial.md) records prerequisites and what has actually been verified. No Pi-0 benchmark score is claimed here.
+**SmolVLA, official Spatial protocol:** paper architecture on the released 256×256 dataset, 8D end-effector state, 100k updates, seed 0. Executing 10 of 50 predicted actions scores **411/500 (82.2%)**. A 10-trial/task pass of the same checkpoint is 81/100. In-training rollouts replan every step and are a different number (68–73% on 100 episodes). Recipe: [smolvla_official.json](configs/libero_spatial/smolvla_official.json). This is not comparable to the ACT/DP table above.
 
-**SmolVLA:** fine-tune the official base with its native training presets and 50-step action execution, using the shared ACT/DP 500-episode evaluation. Start with `bash scripts/train_smolvla_spatial.sh --preview`; see the [settings, commands and validation limits](docs/smolvla_spatial.md). No SmolVLA benchmark score is claimed here.
+![SmolVLA native evaluation](docs/assets/smolvla_evaluation.png)
 
-**SmolVLA RLT post-training:** a learned RL token and Gaussian actor/twin critic use LIBERO-Spatial rollout replay with a frozen SFT backbone. RLT executes 10 steps and adds a matched SFT 10-step baseline; the original SFT stays at 50. See the [RLT runbook](docs/smolvla_rlt_spatial.md), or preview with `bash scripts/posttrain_smolvla_rlt_spatial.sh --preview`. Bounded simulator tests pass; success-rate gains have not been measured.
+**Pi-0 LoRA, HF Spatial:** 30k updates on two GPUs, seed 0. The published record is the training and held-out loss curve in the figure below. No full closed-loop score is included. Recipe: [pi0_lora_hf_spatial.json](configs/libero_spatial/pi0_lora_hf_spatial.json). The older HDF5 [Pi-0 runbook](docs/pi0_lora_spatial.md) is a separate path.
+
+![VLA training evidence](docs/assets/vla_training.png)
+
+**Other SmolVLA paths, without a published success rate:** the HDF5 recipe still targets the shared ACT/DP evaluator ([smolvla_spatial.md](docs/smolvla_spatial.md)). RLT post-training adds a learned RL token and a Gaussian actor/twin critic on frozen SFT features, executes 10 steps, and keeps a matched 10-step SFT control ([smolvla_rlt_spatial.md](docs/smolvla_rlt_spatial.md)). Bounded simulator tests pass; success-rate gains have not been measured. Preview with `bash scripts/posttrain_smolvla_rlt_spatial.sh --preview`.
 
 Run the stages separately with `--stage token`, `--stage warmup`, `--stage online`, and `--stage evaluate`. Freeze the RL token before collecting feature replay; online learning continues collecting new rollouts. See the [step-by-step commands](docs/smolvla_rlt_spatial.md#按阶段执行).
 
@@ -43,11 +47,11 @@ Run the stages separately with `--stage token`, `--stage warmup`, `--stage onlin
 
 ```bash
 python -m pip install -e '.[report,test]'
-python -m roboscope report
-python -m pytest tests/test_results.py tests/test_cli.py
+python -m roboscope report --study all
+python -m pytest tests/test_results.py tests/test_native_results.py tests/test_cli.py
 ```
 
-This path needs no GPU, simulator, datasets, or checkpoint download. Figures are rebuilt from [audited CSV records](results/libero_spatial/episodes.csv), not hard-coded success rates. PNG, PDF and SVG outputs are generated under `docs/assets/`.
+This path needs no GPU, simulator, datasets, or checkpoint download. ACT/DP figures are rebuilt from [audited CSV records](results/libero_spatial/episodes.csv). VLA figures are rebuilt from [results/vla_spatial/snapshot.json](results/vla_spatial/snapshot.json). Success rates are checked against the episode records. PNG, PDF and SVG outputs are generated under `docs/assets/`.
 
 For training and rollout evaluation, follow the [tested environment and data setup](docs/quickstart.md). Training/evaluation commands preview the plan unless `--start` is supplied. Formal runs were measured on Python 3.12, PyTorch 2.7.1+cu118 and two RTX 4090s.
 
@@ -55,18 +59,18 @@ For training and rollout evaluation, follow the [tested environment and data set
 
 ```text
 src/roboscope/
-  data/          # LIBERO adapter, temporal windows, normalization, image cache
-  policies/      # ACT and Diffusion Policy; model and inference math
+  data/          # LIBERO HDF5 adapter, HF/LeRobot adapters, normalization, caches
+  policies/      # ACT, Diffusion Policy, Pi-0 LoRA, SmolVLA, RLT actor
   envs/          # LIBERO setup, observation adapter, spawned environment pool
-  trainers/      # ACT BC/CVAE and diffusion denoising training
-  evaluation/    # matched ACT–DP protocol and historical ACT execution ablations
-  runtime/       # GPU/EGL binding, worker supervision, RNG/checkpoint utilities
-  workflows/     # run preparation, source snapshots, training/evaluation orchestration
-  reporting/     # record validation, paired comparison, reproducible plots
+  trainers/      # behavior cloning, diffusion, official SmolVLA, Pi-0, RLT
+  evaluation/    # matched ACT–DP protocol and HF Pi-0 closed-loop adapter
+  runtime/       # GPU/EGL binding, shared training loop, worker supervision
+  workflows/     # one entry per recipe family; no shared loss formulas
+  reporting/     # ACT/DP paired audit and a separate native VLA audit
 configs/         # path-independent scientific recipes
 examples/        # complete command sequences
-results/         # small portable records and provenance, no weights or datasets
-scripts/         # export/audit/release and bounded local regression tools
+results/         # portable records only: libero_spatial/ and vla_spatial/
+scripts/         # export, train entrypoints, release allowlist
 ```
 
 Structure is inspired by [verl-vla](https://github.com/verl-project/verl-vla)'s separation of workflows, training, and integrations. RoboScope does **not** depend on verl or claim its distributed/RL capabilities.

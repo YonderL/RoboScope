@@ -14,7 +14,7 @@ from roboscope.rl.collector import collect_episode
 from roboscope.rl.learner import RLTAgent
 from roboscope.rl.replay import ReplayBuffer
 from roboscope.runtime.common import atomic_save, require_4090, save_json, seed_all
-from roboscope.trainers.pi0 import capture_rng, cpu_tree, manifest_digest, move_batch, restore_rng
+from roboscope.runtime.training import capture_rng, cpu_tree, manifest_digest, move_batch, restore_rng
 
 
 def train_token(run, cfg, manifest, policy, device, resume=False):

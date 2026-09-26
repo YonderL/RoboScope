@@ -48,8 +48,18 @@ DP validation: every 1,000 updates, 1,024 fixed validation anchors, fixed noise.
 
 Each evaluation worker holds one policy; 8 simulator processes per GPU. DP evaluation splits even/odd task IDs between two 4090s. Latency: batch1, five warmups and 30 measurements per card; public plots pool the 60 raw timing samples and show their median. Different checkpoint timings were measured in different sessions, so small differences need not be model effects.
 
-## SmolVLA extension
+## Native VLA study
 
-The [SmolVLA recipe](smolvla_spatial.md) uses the same shared evaluator, 500 fixed-state trials, seeds, cameras, 600-step budget, settling, simulator parallelism and latency sampling. It retains native 50-step action execution and official base fine-tuning presets (effective batch 64, 20k updates), with natural-language task conditioning. The ACT/DP execution length remains 8. SmolVLA results have not yet been measured; the published tables above remain the ACT/DP study.
+This study is not a row on the ACT/DP table. Images, proprioception, action execution, rollout budget and episode identity all differ. Figures are rebuilt from [results/vla_spatial/snapshot.json](../results/vla_spatial/snapshot.json) with `python -m roboscope report --study vla`.
 
-The [SmolVLA RLT recipe](smolvla_rlt_spatial.md) adds post-training with frozen SFT features and rollout-only replay. It executes 10 actions per prediction and evaluates both its actor and a frozen SFT 10-step control with the same 500-episode protocol. Compare those two to isolate the effect of RL; retain the original 50-step SFT result separately. Real LIBERO smoke tests validate the collection/update path, but full post-training and success-rate comparisons remain pending.
+| Run | Recipe | What was measured |
+|---|---|---|
+| SmolVLA, 100k, execute 10 | [smolvla_official.json](../configs/libero_spatial/smolvla_official.json) | **411/500 (82.2%)**; a 10-trial/task pass on the same checkpoint is 81/100 |
+| SmolVLA periodic rollouts | same training run, execution horizon 1, 100 episodes | 68% at 20k, 73% at 60k, 72% at 80k, 69% at 100k |
+| Pi-0 LoRA, HF Spatial, 30k | [pi0_lora_hf_spatial.json](../configs/libero_spatial/pi0_lora_hf_spatial.json) | Training and held-out trajectory loss only. No full closed-loop score is published |
+
+SmolVLA here is the paper-architecture run: official 256×256 Spatial data, 8D end-effector state, frozen SmolVLM2-500M, 100k updates, batch 64, seed 0. The 500-episode number executes 10 of the 50 predicted actions. It is not the in-training periodic evaluation, which replans every step. Native reports do not record the ACT/DP initial-state IDs, so the two studies cannot be paired episode by episode. One training seed. The 100- and 500-episode passes overlap.
+
+A MuJoCo 3.3.2 rerun of task 5 (43/50) stays in the snapshot as a diagnostic. It is not part of the 411/500 aggregate. A one-episode-per-task Pi-0 smoke run is local only and is not a published score.
+
+The earlier [HDF5 SmolVLA recipe](smolvla_spatial.md) (128×128, 9D joints, `smolvla_base`, 20k updates) and the [RLT recipe](smolvla_rlt_spatial.md) remain separate code paths. RLT smoke tests pass; a success-rate comparison has not been measured. The [HDF5 Pi-0 recipe](pi0_lora_spatial.md) is likewise separate from the HF Spatial training curve above.

@@ -20,11 +20,21 @@ def main():
     evaluation.add_argument("--output", type=Path, required=True)
     evaluation.add_argument("--checkpoint", choices=["best", "final"], default="final")
     evaluation.add_argument(
+        "--gpu-model",
+        choices=["4090", "5880", "pro5000"],
+        default=None,
+        help="Explicitly run both evaluation shards in parallel on this GPU model",
+    )
+    evaluation.add_argument(
         "--rlt-reference",
         action="store_true",
         help="Evaluate an RLT run using its frozen SFT reference at the same horizon",
     )
     evaluation.add_argument("--episodes", type=int, default=50)
+    evaluation.add_argument("--task-ids", type=int, nargs="+", help="Task IDs in the saved training manifest")
+    evaluation.add_argument(
+        "--libero-root", type=Path, help="Benchmark assets for HF-dataset Pi-0 evaluation"
+    )
     evaluation.add_argument("--ddim-steps", type=int, choices=[5, 10, 20, 50, 100], default=10)
     evaluation.add_argument(
         "--ta",
@@ -45,13 +55,21 @@ def main():
     posttraining.add_argument("--start", action="store_true")
     posttraining.add_argument("--resume", action="store_true")
     report = sub.add_parser("report", help="Render figures from portable audited records; no GPU")
-    report.add_argument("--data", type=Path, default=Path("results/libero_spatial"))
+    report.add_argument("--study", choices=["baseline", "vla", "all"], default="baseline")
+    report.add_argument("--data", type=Path, help="Override one study's portable records directory")
     report.add_argument("--output", type=Path, default=Path("docs/assets"))
     args = parser.parse_args()
     if args.command == "report":
-        from roboscope.reporting.figures import render
+        if args.study == "all" and args.data is not None:
+            parser.error("--data requires a single --study")
+        if args.study in ("baseline", "all"):
+            from roboscope.reporting.figures import render
 
-        render(args.data, args.output)
+            render(args.data or Path("results/libero_spatial"), args.output)
+        if args.study in ("vla", "all"):
+            from roboscope.reporting.vla import render
+
+            render(args.data or Path("results/vla_spatial"), args.output)
     elif args.command == "posttrain":
         from roboscope.workflows.config import validate_rlt
 
@@ -110,6 +128,9 @@ def main():
                 args.ta,
                 args.resume,
                 args.rlt_reference,
+                args.gpu_model,
+                args.task_ids,
+                args.libero_root,
             )
         else:
             print("Preview only; pass --start to evaluate. No checkpoint loaded.")

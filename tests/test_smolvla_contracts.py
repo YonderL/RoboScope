@@ -31,8 +31,8 @@ def test_smolvla_matches_formal_act_dp_protocol_with_native_execution(tmp_path):
     for key in ("eval_envs", "latency_warmup", "latency_repeats", "amp"):
         assert cfg[key] == dp[key]
     assert cfg["eval_envs"] == act["runtime"]["eval_envs"]
-    assert cfg["batch_size"] == 64 and cfg["train_steps"] == 20000
-    assert cfg["chunk_size"] == cfg["action_horizon"] == 50
+    assert cfg["batch_size"] == cfg["micro_batch_size"] == 64 and cfg["train_steps"] == 20000
+    assert cfg["chunk_size"] == 50 and cfg["action_horizon"] == 10
     (tmp_path / "config.json").write_text(json.dumps(cfg))
     (tmp_path / "manifest.json").write_text(
         json.dumps(
@@ -40,10 +40,10 @@ def test_smolvla_matches_formal_act_dp_protocol_with_native_execution(tmp_path):
         )
     )
     effective, manifest, variant = evaluation_config(tmp_path, "final", 50, 10, None)
-    assert effective["policy"] == "smolvla" and effective["action_horizon"] == 50
-    assert variant == "smolvla_chunk50"
+    assert effective["policy"] == "smolvla" and effective["action_horizon"] == 10
+    assert variant == "smolvla_chunk10"
     assert all(t["eval_initial_state_ids"] == list(range(50)) for t in manifest["tasks"])
-    with pytest.raises(ValueError, match="native"):
+    with pytest.raises(ValueError, match="action horizon"):
         evaluation_config(tmp_path, "final", 50, 10, 8)
     cfg["policy"] = "diffusion"
     (tmp_path / "config.json").write_text(json.dumps(cfg))

@@ -129,3 +129,27 @@ def test_aggregate_requires_both_shards_and_same_protocol(tmp_path):
     (tmp_path / "shard_1/complete.json").unlink()
     with pytest.raises(FileNotFoundError):
         aggregate_evaluation(tmp_path)
+
+
+def test_hf_context_resolves_assets_without_mutating_training_contract(tmp_path):
+    from roboscope.evaluation.pi0 import evaluation_context
+
+    for directory, suffix in [("bddl_files", ".bddl"), ("init_files", ".pruned_init")]:
+        path = tmp_path / directory / "libero_spatial" / ("pick_up_bowl" + suffix)
+        path.parent.mkdir(parents=True)
+        path.write_text("fixture")
+    cfg = {"rollout_horizon": 220}
+    manifest = {
+        "dataset_format": "lerobot_v3",
+        "dataset_root": "data",
+        "image_size": 256,
+        "tasks": [{"id": 7, "language": "pick up bowl"}],
+    }
+    with pytest.raises(ValueError, match="libero-root"):
+        evaluation_context(cfg, manifest)
+    effective, tasks = evaluation_context(cfg, manifest, tmp_path)
+    assert effective["image_size"] == 256 and effective["image_rotation"] == 180
+    assert tasks[0]["id"] == 7 and tasks[0]["name"] == "pick_up_bowl"
+    assert len(tasks[0]["init_sha256"]) == 64
+    assert cfg == {"rollout_horizon": 220}
+    assert "bddl" not in manifest["tasks"][0]

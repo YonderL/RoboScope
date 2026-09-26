@@ -15,17 +15,25 @@ def pci_key(bus):
     return f"{int(domain, 16):04x}:{bus}:{device}"
 
 
-def gpu_inventory():
+def gpu_model_matches(name, model):
+    patterns = {"4090": "RTX 4090", "5880": "RTX 5880", "pro5000": "RTX PRO 5000"}
+    if model not in patterns:
+        raise ValueError(f"Unsupported GPU model: {model}")
+    return patterns[model] in name
+
+
+def gpu_inventory(model="4090"):
+    gpu_model_matches("", model)
     output = subprocess.check_output(
         ["nvidia-smi", "--query-gpu=index,name,uuid,pci.bus_id", "--format=csv,noheader"], text=True
     )
     cards = []
     for line in output.splitlines():
         index, name, uuid, bus = [x.strip() for x in line.split(",")]
-        if "4090" in name:
+        if gpu_model_matches(name, model):
             cards.append({"index": int(index), "name": name, "uuid": uuid, "pci": pci_key(bus)})
     if len(cards) != 2:
-        raise RuntimeError(f"Expected exactly two 4090s, found {cards}; refusing automatic fallback")
+        raise RuntimeError(f"Expected exactly two {model}s, found {cards}; refusing automatic fallback")
     return cards
 
 
@@ -36,7 +44,7 @@ def egl_inventory():
     只接受具有 EGL_NV_device_cuda 的 NVIDIA EGL 设备；Mesa 可能为同一 PCI
     显卡再暴露一个无法正常初始化的 DRM 条目，不能拿它覆盖 NVIDIA 条目。
     使用 CUDA device 属性，通过 Driver API 查询 PCI 地址。
-    无法验证映射时直接报错，绝不退回默认 GPU 0（可能是 5880）。
+    无法验证映射时直接报错，绝不退回未经选择的默认 GPU 0。
     """
     egl = ctypes.CDLL(ctypes.util.find_library("EGL") or "libEGL.so.1")
     egl.eglGetProcAddress.argtypes = [ctypes.c_char_p]
@@ -82,8 +90,8 @@ def egl_inventory():
     return found
 
 
-def cards_and_envs():
-    cards = gpu_inventory()
+def cards_and_envs(model="4090"):
+    cards = gpu_inventory(model)
     env = os.environ.copy()
     env.pop("CUDA_VISIBLE_DEVICES", None)
     mapping = json.loads(
@@ -100,7 +108,7 @@ def cards_and_envs():
     envs = []
     for card in cards:
         if card["pci"] not in mapping:
-            raise RuntimeError("Cannot map 4090 EGL")
+            raise RuntimeError(f"Cannot map {model} EGL")
         card["egl"] = mapping[card["pci"]]
         worker = os.environ.copy()
         worker.update(

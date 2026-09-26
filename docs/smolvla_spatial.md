@@ -15,14 +15,14 @@
 |---|---|
 | 初始化 | smolvla_base；缺失或不兼容权重直接报错 |
 | 更新次数 / 有效 batch | 20,000 / 64 |
-| 显存分批 | microbatch 8，累计到 64 后更新一次；按有效动作数加权保留原生 masked loss |
+| 显存分批 | microbatch 64；调小后累计到有效 batch 64，按有效动作数加权保留原生 masked loss |
 | 训练参数 | 冻结视觉编码器和 VLM，训练 action expert、state/action projections |
 | 优化器 | AdamW，lr=1e-4，betas=(0.9,0.95)，eps=1e-8，weight decay=1e-10 |
 | 梯度裁剪 | 10 |
 | 调度预设 | warmup=1,000，decay=30,000，最终 lr=2.5e-6 |
 | 调度实际行为 | 原生 0.6.1 scheduler 在 20,000 步预算下自动缩放 warmup 为 666、decay 为 20,000 |
 | 训练精度 | 官方 base 的 `use_amp=false`；原生冻结 VLM 为 BF16、expert/projections 为 FP32；recipe 的 `amp=true` 仅用于共享评测 |
-| 观测 / 动作块 / 每次执行 | 1 / 50 / **50** |
+| 观测 / 动作块 / 每次执行 | 1 / 50 / **10** |
 | Flow sampling | 原生 10 步 |
 | 图像预处理 | 原始 128×128 RGB，经原生 resize-with-padding 到 512×512 |
 | 语言 | HDF5 的 `problem_info.language_instruction`，原生换行、tokenizer、长度 48 |
@@ -33,9 +33,21 @@
 原始 OpenGL 图像上下翻转到项目约定的 OpenCV 方向；RGB 通道不交换。
 不添加 LoRA、EMA 或 Aloha 动作变换。
 
-训练使用项目选定的第一张 RTX 4090；评测与 ACT/DP 一样，使用两张卡的奇偶任务分片。
+训练默认使用最后一张 RTX 4090；SmolVLA 评测默认在该卡上顺序完成奇偶任务分片。
 本项目的 GPU/EGL 调度要求机器有两张 RTX 4090。若训练显存不足，可减小 `micro_batch_size`，
 保持 `batch_size=64`；累计梯度按有效动作数加权，优化器步数与原生设置一致。
+
+评测可显式传入 `--gpu-model 5880`，使用两张 RTX 5880 并行执行两个分片；
+每张卡仍为 8 个环境，总计 500 回合，固定初态、随机种子与执行长度不变。
+该选项只影响此次评测，训练的默认 GPU 设置不变。GPU 型号会保存在评测配置中；
+不同型号上的推理延迟应分开报告。下面命令评测 SFT 的验证 loss 最优 checkpoint：
+
+```bash
+python -m roboscope evaluate \
+  --source outputs/smolvla_spatial_seed0 \
+  --output outputs/smolvla_spatial_seed0/evaluation_best_5880 \
+  --checkpoint best --episodes 50 --ta 10 --gpu-model 5880 --start
+```
 
 ## 评测协议
 
@@ -108,7 +120,7 @@ best 不代表最高闭环成功率，正式默认使用 final。
 `last.pt` 包含优化器、原生 scheduler 和 RNG 状态，恢复时校验配置、数据清单及源码。
 checkpoint 保存完整模型，所需磁盘空间大于仅保存 adapter 的 Pi-0 路线。
 
-评测输出 `summary.json`、`eval/smolvla_chunk50/shard{0,1}/` 下的逐回合 JSONL、轨迹、视频、
+评测输出 `summary.json`、`eval/smolvla_chunk10/shard{0,1}/` 下的逐回合 JSONL、轨迹、视频、
 延迟原始样本及完成标记，沿用 ACT/DP 的 checkpoint hash 和初态身份核验。
 
 CPU 回归覆盖：预览与配置、原生微型 SmolVLM/expert 前向反向及处理器、严格权重加载与恢复、

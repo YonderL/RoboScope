@@ -37,7 +37,8 @@ def train_smolvla(cfg, resume=False):
         command = [sys.executable, "-m", "roboscope.trainers.smolvla", "--run", str(run)]
         if resume:
             command.append("--resume")
-        envs[0]["TOKENIZERS_PARALLELISM"] = "false"
-        run_workers([command], envs[:1], [run / "train.log"])
+        # Last RTX 4090 in nvidia-smi order; the earlier 4090 is left untouched.
+        envs[-1]["TOKENIZERS_PARALLELISM"] = "false"
+        run_workers([command], envs[-1:], [run / "train.log"])
     finally:
         lock.close()

@@ -168,9 +168,11 @@ def evaluation_config(source, checkpoint, episodes, ddim_steps, ta, rlt_referenc
             variant = f"smolvla_{label}_c{ta:03d}"
         elif cfg.get("policy") == "smolvla":
             ta = cfg["action_horizon"] if ta is None else ta
-            if ta != 50 or ddim_steps != 10:
-                raise ValueError("SmolVLA uses native --ta 50 and flow sampling; --ddim-steps is a DP option")
-            variant = "smolvla_chunk50"
+            if ta != cfg["action_horizon"] or ddim_steps != 10:
+                raise ValueError(
+                    "SmolVLA must use its configured action horizon; --ddim-steps is a DP option"
+                )
+            variant = f"smolvla_chunk{ta}"
         else:
             cfg["policy"] = "diffusion"
             ta = 8 if ta is None else ta
@@ -193,8 +195,24 @@ def evaluation_config(source, checkpoint, episodes, ddim_steps, ta, rlt_referenc
 
 
 def evaluate(
-    source, output, checkpoint="final", episodes=50, ddim_steps=10, ta=None, resume=False, rlt_reference=False
+    source,
+    output,
+    checkpoint="final",
+    episodes=50,
+    ddim_steps=10,
+    ta=None,
+    resume=False,
+    rlt_reference=False,
+    gpu_model=None,
+    task_ids=None,
+    libero_root=None,
 ):
+    if gpu_model not in (None, "4090", "5880", "pro5000"):
+        raise ValueError(f"Unsupported GPU model: {gpu_model}")
+    if task_ids is not None and (
+        not task_ids or len(set(task_ids)) != len(task_ids) or not set(task_ids) <= set(range(10))
+    ):
+        raise ValueError("Task IDs must be unique integers in 0..9")
     config_path = Path(source) / "config.json"
     if config_path.exists() and json.loads(config_path.read_text()).get("policy") == "pi0_lora":
         if rlt_reference:
@@ -203,7 +221,9 @@ def evaluate(
             raise ValueError("--ddim-steps and --ta are DP options; Pi-0 uses its saved flow/action horizons")
         from roboscope.workflows.pi0 import evaluate_pi0
 
-        return evaluate_pi0(source, output, checkpoint, episodes, resume)
+        return evaluate_pi0(source, output, checkpoint, episodes, resume, libero_root, gpu_model, task_ids)
+    if libero_root is not None:
+        raise ValueError("ACT/DP/SmolVLA use benchmark paths from their saved manifest")
     import torch
 
     from roboscope.data.libero import save_json
@@ -212,6 +232,10 @@ def evaluate(
     cfg, manifest, variant = evaluation_config(source, checkpoint, episodes, ddim_steps, ta, rlt_reference)
     run = Path(output).resolve()
     cfg["output_root"] = str(run)
+    if task_ids is not None:
+        cfg["evaluation_task_ids"] = sorted(task_ids)
+    if gpu_model is not None:
+        cfg["evaluation_gpu_model"] = gpu_model
     # Fail before recording an invalid initial-state schedule.
     for task in manifest["tasks"]:
         if len(torch.load(task["init"], map_location="cpu", weights_only=False)) < episodes:
@@ -235,29 +259,32 @@ def evaluate(
                 target = Path(source).resolve().parent / name
             if not (run / name).exists():
                 (run / name).symlink_to(target)
-        cards, envs = cards_and_envs()
+        cards, envs = cards_and_envs(gpu_model or "4090")
         save_json(run / "gpu_mapping.json", cards)
-        run_workers(
+        commands = [
             [
-                [
-                    sys.executable,
-                    "-m",
-                    "roboscope.evaluation.worker",
-                    "--run",
-                    str(run),
-                    "--variant",
-                    variant,
-                    "--shard",
-                    str(i),
-                ]
-                for i in range(2)
-            ],
-            envs,
-            [run / f"eval_shard{i}.log" for i in range(2)],
-        )
+                sys.executable,
+                "-m",
+                "roboscope.evaluation.worker",
+                "--run",
+                str(run),
+                "--variant",
+                variant,
+                "--shard",
+                str(i),
+            ]
+            for i in range(2)
+        ]
+        logs = [run / f"eval_shard{i}.log" for i in range(2)]
+        if cfg.get("policy") == "smolvla" and gpu_model is None:
+            # One 4090: finish even-task shard, then odd-task shard, on the last card.
+            for command, log in zip(commands, logs, strict=True):
+                run_workers([command], [envs[-1]], [log])
+        else:
+            run_workers(commands, envs, logs)
         from roboscope.reporting.records import read_evaluation
 
-        rows, identity = read_evaluation(run / "eval" / variant, episodes)
+        rows, identity = read_evaluation(run / "eval" / variant, episodes, task_ids)
         save_json(
             run / "summary.json",
             {**identity, "episodes": len(rows), "success_rate": sum(r["success"] for r in rows) / len(rows)},

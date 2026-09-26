@@ -26,10 +26,18 @@ def seed_all(seed):
 
 
 def require_4090():
+    require_gpu("4090")
+
+
+def require_gpu(model):
+    """Check the explicitly selected worker GPU; training keeps its 4090 default."""
+    from roboscope.runtime.gpu import gpu_model_matches
+
+    gpu_model_matches("", model)
     if not torch.cuda.is_available() or torch.cuda.device_count() != 1:
         raise RuntimeError("Worker requires exactly one UUID-masked CUDA device")
-    if "4090" not in torch.cuda.get_device_name(0):
-        raise RuntimeError("Refusing a non-4090 GPU")
+    if not gpu_model_matches(torch.cuda.get_device_name(0), model):
+        raise RuntimeError(f"Refusing a non-{model} GPU")
 
 
 def atomic_save(path, value):
@@ -51,7 +59,8 @@ def variants(cfg):
             }
         ]
     if cfg.get("policy") == "smolvla":
-        return [{"name": "smolvla_chunk50", "model": "smolvla", "ta": 50, "ddim_steps": 0}]
+        ta = cfg["action_horizon"]
+        return [{"name": f"smolvla_chunk{ta}", "model": "smolvla", "ta": ta, "ddim_steps": 0}]
     pairs = {(n, cfg["action_horizon"]) for n in cfg["ddim_ablation"]}
     pairs |= {(cfg["ddim_steps"], ta) for ta in cfg["action_horizon_ablation"]}
     return [

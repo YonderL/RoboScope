@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader, Subset
 
 from roboscope.data.sequences import StepBatchSampler
 from roboscope.runtime.common import atomic_save, require_4090, save_json, seed_all
-from roboscope.trainers.pi0 import capture_rng, cpu_tree, fixed_rng, manifest_digest, restore_rng
+from roboscope.runtime.training import capture_rng, cpu_tree, fixed_rng, manifest_digest, restore_rng
 
 
 def microbatches(batch, size, device):

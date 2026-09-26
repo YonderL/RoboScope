@@ -39,6 +39,10 @@ Four chunk sizes × three seeds, 32 epochs, evaluations every 8 epochs. These cu
 
 Positive TE coefficient 0.01 weights older predictions slightly more. This is a plausible source of stale predictions, especially for long chunks, but performance tables alone do not prove the mechanism. The exploratory gripper-exclusion test did not improve SR (85.5% vs rerun TE 89.0%), and baseline repetition varied from 87.0% to 89.0%. Dynamic batch numerical differences were measured; their full causal contribution to rollout divergence remains unresolved.
 
+## Native VLA evidence is a separate study
+
+SmolVLA's published 411/500 result uses 256×256 images, 8D end-effector state and execution horizon 10. Pi-0's published HF Spatial run is a 30k-step loss curve without a full closed-loop score. Neither number belongs in the ACT/DP comparison above. Protocol, recipe files and figures are in [experiments](experiments.md).
+
 ## Next experiments, in order
 
 1. Establish repeatability under a fixed batch/scheduling protocol and inspect the persistent ramekin failure.

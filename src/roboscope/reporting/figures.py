@@ -10,6 +10,7 @@ import numpy as np
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from roboscope.reporting.plotting import save, style
 from roboscope.reporting.records import audit_portable
 
 COLORS = {"act_final": "#2764A5", "dp_final": "#008675", "dp_best": "#D08B32"}
@@ -45,30 +46,6 @@ def paired(a, b):
         paired_stratified_bootstrap_ci95_pp=np.percentile(draws, [2.5, 97.5]).tolist(),
         bootstrap_seed=2026,
     )
-
-
-def style():
-    plt.rcParams.update(
-        {
-            "font.family": "DejaVu Sans",
-            "font.size": 10,
-            "axes.titlesize": 12,
-            "axes.spines.top": False,
-            "axes.spines.right": False,
-            "axes.labelcolor": "#273444",
-            "text.color": "#273444",
-            "axes.edgecolor": "#CFD7DD",
-            "savefig.facecolor": "white",
-            "pdf.fonttype": 42,
-            "svg.fonttype": "none",
-        }
-    )
-
-
-def save(fig, output, name):
-    for suffix in ("png", "pdf", "svg"):
-        fig.savefig(output / f"{name}.{suffix}", dpi=180, bbox_inches="tight")
-    plt.close(fig)
 
 
 def render(data, output):

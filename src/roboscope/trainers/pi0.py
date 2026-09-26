@@ -7,23 +7,50 @@ fixed-sample flow-matching loss; it must never be labelled a task success rate.
 
 import argparse
 import csv
-import hashlib
 import io
 import json
 import math
 import os
 import platform
-import random
-import tempfile
 import time
-from contextlib import contextmanager, nullcontext
+from contextlib import nullcontext
 from pathlib import Path
 
-import numpy as np
 import torch
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader, Subset
+
+from roboscope.runtime.training import (
+    atomic_checkpoint as atomic_checkpoint,
+)
+from roboscope.runtime.training import (
+    atomic_write as atomic_write,
+)
+from roboscope.runtime.training import (
+    capture_rng as capture_rng,
+)
+from roboscope.runtime.training import (
+    cpu_tree as cpu_tree,
+)
+from roboscope.runtime.training import (
+    fixed_rng as fixed_rng,
+)
+from roboscope.runtime.training import (
+    manifest_digest as manifest_digest,
+)
+from roboscope.runtime.training import (
+    move_batch as move_batch,
+)
+from roboscope.runtime.training import (
+    restore_rng as restore_rng,
+)
+from roboscope.runtime.training import (
+    save_json as save_json,
+)
+from roboscope.runtime.training import (
+    seed_all as seed_all,
+)
 
 
 class StepMicroBatchSampler:
@@ -66,55 +93,6 @@ class StepMicroBatchSampler:
                 cursor += count
             for offset in range(0, local_batch, self.micro):
                 yield indices[offset : offset + self.micro]
-
-
-def seed_all(seed):
-    random.seed(seed)
-    np.random.seed(seed % (2**32))
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-
-
-def capture_rng(device):
-    return {
-        "python": random.getstate(),
-        "numpy": np.random.get_state(),
-        "torch": torch.get_rng_state(),
-        "cuda": torch.cuda.get_rng_state(device) if device.type == "cuda" else None,
-    }
-
-
-def restore_rng(state, device):
-    random.setstate(state["python"])
-    np.random.set_state(state["numpy"])
-    torch.set_rng_state(state["torch"])
-    if device.type == "cuda":
-        torch.cuda.set_rng_state(state["cuda"], device)
-
-
-@contextmanager
-def fixed_rng(seed, device):
-    saved = capture_rng(device)
-    try:
-        random.seed(seed)
-        np.random.seed(seed % (2**32))
-        # manual_seed also seeds CUDA generators; use the CPU generator directly
-        # so validation never changes another device's RNG in this process.
-        torch.random.default_generator.manual_seed(seed)
-        if device.type == "cuda":
-            with torch.cuda.device(device):
-                torch.cuda.manual_seed(seed)
-        yield
-    finally:
-        restore_rng(saved, device)
-
-
-def move_batch(batch, device):
-    return {
-        key: value.to(device, non_blocking=True) if torch.is_tensor(value) else value
-        for key, value in batch.items()
-    }
 
 
 def accumulate_gradients(model, batches, accumulation_steps, device):
@@ -174,30 +152,6 @@ def validation(model, loader, seed, device, rank=0):
         model.train(was_training)
 
 
-def atomic_write(path, write):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
-    try:
-        with os.fdopen(descriptor, "wb") as handle:
-            write(handle)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, path)
-    finally:
-        if os.path.exists(temporary):
-            os.unlink(temporary)
-
-
-def atomic_checkpoint(path, payload):
-    atomic_write(path, lambda handle: torch.save(payload, handle))
-
-
-def save_json(path, value):
-    contents = (json.dumps(value, indent=2, allow_nan=False) + "\n").encode()
-    atomic_write(path, lambda handle: handle.write(contents))
-
-
 def write_history(run, history):
     """Rewrite committed metrics on resume, removing any uncheckpointed tail."""
     save_json(run / "train_history.json", history)
@@ -222,20 +176,6 @@ def append_metrics(run, row, history):
             writer.writeheader()
         writer.writerow(row)
     print(json.dumps(row, allow_nan=False), flush=True)
-
-
-def manifest_digest(manifest):
-    return hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest()
-
-
-def cpu_tree(value):
-    if torch.is_tensor(value):
-        return value.detach().cpu()
-    if isinstance(value, dict):
-        return {key: cpu_tree(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return type(value)(cpu_tree(item) for item in value)
-    return value
 
 
 def export_checkpoint(model, cfg, manifest, step, score, validation_step):
@@ -276,7 +216,19 @@ def resume_checkpoint(run, cfg, manifest, world_size, resume):
     return previous
 
 
-def train(run, cfg, manifest, model, train_dataset, val_dataset, device, rank=0, world_size=1, resume=False):
+def train(
+    run,
+    cfg,
+    manifest,
+    model,
+    train_dataset,
+    val_dataset,
+    device,
+    rank=0,
+    world_size=1,
+    resume=False,
+    stop_after=None,
+):
     """Train one rank. Injected model/datasets also allow a real CPU/DDP regression."""
     run = Path(run)
     expected = cfg["micro_batch_size"] * cfg["gradient_accumulation_steps"] * world_size
@@ -324,6 +276,9 @@ def train(run, cfg, manifest, model, train_dataset, val_dataset, device, rank=0,
             )
         return history
 
+    if stop_after is not None and stop_after <= 0:
+        raise ValueError("stop_after must be positive")
+    end_step = cfg["train_steps"] if stop_after is None else min(step + stop_after, cfg["train_steps"])
     indices = torch.randperm(len(val_dataset), generator=torch.Generator().manual_seed(cfg["seed"] + 2026))[
         : cfg["validation_samples"]
     ].tolist()
@@ -353,7 +308,8 @@ def train(run, cfg, manifest, model, train_dataset, val_dataset, device, rank=0,
     )
     val_loader = DataLoader(
         Subset(val_dataset, indices[rank::world_size]),
-        batch_size=cfg["micro_batch_size"],
+        # Keep validation noise grouping stable when migrating training microbatches.
+        batch_size=cfg.get("validation_micro_batch_size", cfg["micro_batch_size"]),
         shuffle=False,
         generator=torch.Generator().manual_seed(cfg["seed"] + 54321 + rank),
         **loader_kwargs,
@@ -365,7 +321,7 @@ def train(run, cfg, manifest, model, train_dataset, val_dataset, device, rank=0,
         torch.cuda.synchronize(device)
     wall_start = time.perf_counter()
     train_start = wall_start
-    while step < cfg["train_steps"]:
+    while step < end_step:
         worker.train()
         optimizer.zero_grad(set_to_none=True)
         lr = learning_rate(step, cfg)
@@ -377,7 +333,7 @@ def train(run, cfg, manifest, model, train_dataset, val_dataset, device, rank=0,
         step += 1
         window += torch.stack((loss, grad_norm.detach().double(), torch.ones((), device=device)))
         final = step == cfg["train_steps"]
-        validate_now = step % cfg["validate_every"] == 0 or final
+        validate_now = step % cfg["validate_every"] == 0 or final or step == end_step
         save_now = step % cfg["save_every"] == 0 or validate_now or final
         if step % cfg["log_every"] != 0 and not save_now:
             continue
@@ -469,6 +425,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run", type=Path, required=True)
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument(
+        "--stop-after", type=int, help="Checkpoint after N updates without changing the LR schedule"
+    )
     args = parser.parse_args()
     run = args.run.resolve()
     cfg = json.loads((run / "config.json").read_text())
@@ -480,9 +439,12 @@ def main():
     if world_size != cfg["world_size"] or not torch.cuda.is_available():
         raise RuntimeError("Launch Pi-0 with torchrun on the configured two CUDA GPUs")
     if torch.cuda.device_count() != world_size:
-        raise RuntimeError("Mask CUDA_VISIBLE_DEVICES to exactly the two allocated RTX 4090 GPUs")
-    if any("4090" not in torch.cuda.get_device_name(index) for index in range(world_size)):
-        raise RuntimeError("Pi-0 recipe requires two RTX 4090 GPUs")
+        raise RuntimeError("Mask CUDA_VISIBLE_DEVICES to exactly the allocated CUDA GPUs")
+    from roboscope.runtime.gpu import gpu_model_matches
+
+    gpu_model = cfg.get("gpu_model", "4090")
+    if any(not gpu_model_matches(torch.cuda.get_device_name(i), gpu_model) for i in range(world_size)):
+        raise RuntimeError(f"Pi-0 recipe requires {gpu_model} GPUs")
     device = torch.device("cuda", local_rank)
     torch.cuda.set_device(device)
     if not torch.cuda.is_bf16_supported():
@@ -495,16 +457,35 @@ def main():
     if world_size > 1:
         dist.init_process_group("nccl")
     try:
-        from roboscope.data.pi0 import Pi0Dataset
         from roboscope.policies.pi0 import Pi0Policy
 
         seed_all(cfg["seed"])
         model = Pi0Policy(cfg, manifest).to(device)
         if rank == 0:
             save_json(run / "model_summary.json", model.parameter_counts())
-        dataset = Pi0Dataset(manifest, cfg["chunk_size"], "train", run / "image_cache")
-        val_dataset = Pi0Dataset(manifest, cfg["chunk_size"], "val", run / "image_cache")
-        train(run, cfg, manifest, model, dataset, val_dataset, device, rank, world_size, args.resume)
+        if manifest.get("dataset_format") == "lerobot_v3":
+            from roboscope.data.pi0_lerobot import LeRobotSpatialDataset
+
+            dataset = LeRobotSpatialDataset(manifest, cfg["chunk_size"], "train")
+            val_dataset = LeRobotSpatialDataset(manifest, cfg["chunk_size"], "val")
+        else:
+            from roboscope.data.pi0 import Pi0Dataset
+
+            dataset = Pi0Dataset(manifest, cfg["chunk_size"], "train", run / "image_cache")
+            val_dataset = Pi0Dataset(manifest, cfg["chunk_size"], "val", run / "image_cache")
+        train(
+            run,
+            cfg,
+            manifest,
+            model,
+            dataset,
+            val_dataset,
+            device,
+            rank,
+            world_size,
+            args.resume,
+            stop_after=args.stop_after,
+        )
     finally:
         if dist.is_initialized():
             dist.destroy_process_group()

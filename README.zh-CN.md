@@ -4,13 +4,19 @@
 
 [English](README.md) · [环境与复现命令](docs/quickstart.md) · [架构](docs/architecture.md) · [实验配置](docs/experiments.md) · [研究分析](docs/findings.md)
 
-当前实现：LIBERO-Spatial 上的多任务 ACT、Diffusion Policy，以及 action chunking、temporal ensemble、DDIM 步数、执行 horizon 和 checkpoint 选择分析。ACT/DP 使用 task ID 条件。新增的 **Pi-0 LoRA** 使用真实语言指令，支持两张4090同步微调、断点恢复、独立闭环评测及指标保存；实现与实测范围见 [Pi-0 方案和一键运行说明](docs/pi0_lora_spatial.md)，尚不宣称其基准成功率。
+当前实现：LIBERO-Spatial 上的多任务 ACT、Diffusion Policy，以及 action chunking、temporal ensemble、DDIM 步数、执行 horizon 和 checkpoint 选择分析。ACT/DP 使用 task ID 条件。另外两条语言条件路线单独记录：官方数据上的 SmolVLA，以及 HF Spatial 上的 Pi-0 LoRA。它们的图像、状态和回合协议与下方 ACT/DP 表不同，不并入该比较。
 
 ![ACT与DP比较](docs/assets/act_vs_dp.png)
 
-**SmolVLA** 已接入：使用官方 base 微调设置，训练与推理均保留 50 步动作块，评测复用 ACT/DP 的 10 任务 × 50 固定初态协议。可用 `bash scripts/train_smolvla_spatial.sh --preview` 预览；配置、训练评测命令及验证范围见 [SmolVLA 运行说明](docs/smolvla_spatial.md)。尚未运行完整 GPU 基准，不报告成功率。
+**SmolVLA（官方 Spatial 协议）**：论文架构、256×256 官方数据、8D 末端状态、100k 更新、seed 0。每次执行 10 步的闭环结果是 **411/500（82.2%）**；同一权重每任务 10 回合为 81/100。训练中的周期评测是每步重规划，成绩在 68%–73%（100 回合），与 82.2% 不是同一个协议。配方见 [smolvla_official.json](configs/libero_spatial/smolvla_official.json)，说明见 [smolvla_official_spatial.md](docs/smolvla_official_spatial.md)。
 
-**SmolVLA RLT 后训练** 已接入：冻结 SFT，通过 RL token 重建、Gaussian actor 和双 critic，使用 LIBERO-Spatial rollout 填充 replay。RLT 每次执行 10 步，增加 SFT 10 步配对对照，原 SFT 保留 50 步。可用 `bash scripts/posttrain_smolvla_rlt_spatial.sh --preview` 预览，详见 [RLT 运行说明](docs/smolvla_rlt_spatial.md)。真实仿真短测试已通过，成功率增益尚未测量。
+![SmolVLA 原生评测](docs/assets/smolvla_evaluation.png)
+
+**Pi-0 LoRA（HF Spatial）**：30k 更新，seed 0。发布内容是下图中的训练损失和留出轨迹损失，没有完整闭环分数。配方见 [pi0_lora_hf_spatial.json](configs/libero_spatial/pi0_lora_hf_spatial.json)。旧的 HDF5 [Pi-0 说明](docs/pi0_lora_spatial.md) 是另一条路径。
+
+![VLA 训练记录](docs/assets/vla_training.png)
+
+另有两条尚未报告成功率的路径：走共享评测器的 HDF5 SmolVLA（[smolvla_spatial.md](docs/smolvla_spatial.md)），以及 RLT 后训练。RLT 冻结 SFT，用 RL token、Gaussian actor 和双 critic 在 LIBERO-Spatial rollout 上更新；每次执行 10 步，并保留 SFT 的 10 步对照。可用 `bash scripts/posttrain_smolvla_rlt_spatial.sh --preview` 预览，详见 [RLT 运行说明](docs/smolvla_rlt_spatial.md)。仿真短测试已通过，成功率增益尚未测量。
 
 支持 [分阶段执行](docs/smolvla_rlt_spatial.md#按阶段执行)：SFT → `--stage token` → `--stage warmup` → `--stage online` → `--stage evaluate`。先冻结 RL token 再保存特征 replay；在线阶段持续采集新轨迹并更新策略。
 
@@ -36,8 +42,8 @@
 
 ```bash
 python -m pip install -e '.[report,test]'
-python -m roboscope report
-python -m pytest tests/test_results.py tests/test_cli.py
+python -m roboscope report --study all
+python -m pytest tests/test_results.py tests/test_native_results.py tests/test_cli.py
 ```
 
 正式训练和评测使用 [quickstart](docs/quickstart.md)。CLI 默认只预览，显式添加 `--start` 才运行。

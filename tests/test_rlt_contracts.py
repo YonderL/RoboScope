@@ -55,7 +55,7 @@ def test_rlt_preview_and_eval_protocol(tmp_path):
         "video_episodes_per_task",
     ):
         assert cfg[key] == sft[key]
-    assert cfg["action_horizon"] == 10 and sft["action_horizon"] == 50
+    assert cfg["action_horizon"] == sft["action_horizon"] == 10
     output = tmp_path / "untouched"
     result = subprocess.run(
         [

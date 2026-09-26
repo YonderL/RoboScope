@@ -1,0 +1,12 @@
+{
+  "smolvla_100k_exec10_10ep": {
+    "successes": 81,
+    "episodes": 100,
+    "success_rate_percent": 81.0
+  },
+  "smolvla_100k_exec10_50ep": {
+    "successes": 411,
+    "episodes": 500,
+    "success_rate_percent": 82.2
+  }
+}

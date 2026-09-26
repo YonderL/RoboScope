@@ -13,7 +13,7 @@ from roboscope.data.sequences import SequenceDataset
 from roboscope.envs.pool import EnvPool
 from roboscope.policies.act import TaskACT
 from roboscope.policies.diffusion import TaskDiffusionPolicy
-from roboscope.runtime.common import CAMERAS, digest, load_config, require_4090, save_json, seed_all, variants
+from roboscope.runtime.common import CAMERAS, digest, load_config, require_gpu, save_json, seed_all, variants
 
 
 def batch_observations(slots, kind, device="cuda"):
@@ -259,7 +259,7 @@ def main():
     p.add_argument("--shard", type=int, choices=[0, 1], required=True)
     a = p.parse_args()
     cfg = load_config(a.run / "config.json")
-    require_4090()
+    require_gpu(cfg.get("evaluation_gpu_model", "4090"))
     torch.set_num_threads(cfg["cpu_threads"])
     torch.use_deterministic_algorithms(True)
     seed_all(cfg["seed"])
@@ -274,7 +274,11 @@ def main():
         "variant": variant,
         "shard": a.shard,
         **identity,
-        "task_ids": [t["id"] for t in manifest["tasks"] if t["id"] % 2 == a.shard],
+        "task_ids": [
+            t["id"]
+            for t in manifest["tasks"]
+            if t["id"] % 2 == a.shard and t["id"] in cfg.get("evaluation_task_ids", range(10))
+        ],
     }
     if (target / "config.json").exists() and json.loads((target / "config.json").read_text()) != metadata:
         raise RuntimeError("Evaluation identity changed; refusing mixed checkpoints")
@@ -293,7 +297,7 @@ def main():
         raise RuntimeError("Duplicate episodes")
     jobs = []
     for task in manifest["tasks"]:
-        if task["id"] % 2 != a.shard:
+        if task["id"] not in metadata["task_ids"]:
             continue
         if digest(task["init"]) != task["init_sha256"] or digest(task["bddl"]) != task["bddl_sha256"]:
             raise RuntimeError("Changed initial states/BDDL")

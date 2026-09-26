@@ -79,9 +79,11 @@ def validate_smolvla(cfg):
         raise ValueError("micro_batch_size must not exceed batch_size")
     if not 0 < cfg.get("validation_fraction", 0) < 1:
         raise ValueError("validation_fraction must be between zero and one")
-    for key, value in {"chunk_size": 50, "action_horizon": 50, "task_setting": "natural_language"}.items():
+    for key, value in {"chunk_size": 50, "task_setting": "natural_language"}.items():
         if cfg.get(key) != value:
             raise ValueError(f"SmolVLA requires {key}={value!r}")
+    if not 1 <= cfg.get("action_horizon", 0) <= cfg["chunk_size"]:
+        raise ValueError("action_horizon must be within the 50-step SmolVLA chunk")
     for key in ("pretrained_path", "pretrained_revision", "vlm_path", "vlm_revision"):
         if not cfg.get(key):
             raise ValueError(f"{key} is required")

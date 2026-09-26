@@ -12,5 +12,5 @@ jobs:
       - run: ruff check src tests scripts
       - run: ruff format --check src tests scripts
       - run: python -m pytest tests
-      - run: python -m roboscope report --output /tmp/roboscope-figures
+      - run: python -m roboscope report --study all --output /tmp/roboscope-figures
       - run: python scripts/build_release.py --output /tmp/roboscope-source.tar.gz

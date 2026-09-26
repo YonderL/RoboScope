@@ -23,6 +23,24 @@ ATTENTION_TARGET = re.compile(
     r"(?:paligemma\.model\.language_model|gemma_expert\.model)"
     r"\.layers\.\d+\.self_attn\.(?:q|k|v|o)_proj$"
 )
+_LORA_GROUP_PATTERNS = {
+    "vlm_attention": re.compile(
+        r"model\.paligemma_with_expert\.paligemma\.model\.language_model"
+        r"\.layers\.\d+\.self_attn\.(?:q|k|v|o)_proj$"
+    ),
+    "vlm_ffn": re.compile(
+        r"model\.paligemma_with_expert\.paligemma\.model\.language_model"
+        r"\.layers\.\d+\.mlp\.(?:gate|up|down)_proj$"
+    ),
+    "expert_attention": re.compile(
+        r"model\.paligemma_with_expert\.gemma_expert\.model"
+        r"\.layers\.\d+\.self_attn\.(?:q|k|v|o)_proj$"
+    ),
+    "expert_ffn": re.compile(
+        r"model\.paligemma_with_expert\.gemma_expert\.model"
+        r"\.layers\.\d+\.mlp\.(?:gate|up|down)_proj$"
+    ),
+}
 IMAGE_KEYS = ("observation.images.base_0_rgb", "observation.images.left_wrist_0_rgb")
 PUBLIC_TOKENIZER = "https://storage.googleapis.com/big_vision/paligemma_tokenizer.model"
 
@@ -193,31 +211,58 @@ class LoRALinear(nn.Module):
         return output + update.to(output.dtype) * self.scaling
 
 
+def lora_assignments(cfg):
+    """Default recipe trains attention only. Grouped recipes add FFN with separate ranks."""
+    groups = cfg.get("lora_groups")
+    if not groups:
+        return [(ATTENTION_TARGET, int(cfg.get("lora_rank", 16)), float(cfg.get("lora_alpha", 16)))]
+    assignments = []
+    seen = set()
+    for group in groups:
+        name = group["name"]
+        if name not in _LORA_GROUP_PATTERNS or name in seen:
+            raise ValueError(f"Unknown or repeated LoRA group: {name}")
+        rank, alpha = int(group["rank"]), float(group["alpha"])
+        if rank < 1 or alpha <= 0:
+            raise ValueError(f"Invalid LoRA rank or alpha for {name}")
+        seen.add(name)
+        assignments.append((_LORA_GROUP_PATTERNS[name], rank, alpha))
+    return assignments
+
+
 def inject_lora(policy, cfg):
-    """Only transformer attention Q/K/V/O; the vision encoder remains frozen."""
+    """Freeze the base, including the vision encoder, and attach the configured LoRA groups."""
     if cfg.get("gradient_checkpointing", True) and cfg.get("lora_dropout", 0.0):
         raise ValueError("LeRobot checkpoints do not preserve RNG; use lora_dropout=0 with checkpointing")
     policy.requires_grad_(False)
-    targets = [
-        name
-        for name, module in policy.named_modules()
-        if isinstance(module, nn.Linear) and ATTENTION_TARGET.fullmatch(name)
-    ]
-    if not targets:
-        raise ValueError("No Pi-0 attention projections matched; incompatible LeRobot architecture")
-    for name in targets:
-        parent_name, leaf = name.rsplit(".", 1)
-        parent = policy.get_submodule(parent_name)
-        setattr(
-            parent,
-            leaf,
-            LoRALinear(
-                getattr(parent, leaf),
-                cfg.get("lora_rank", 16),
-                cfg.get("lora_alpha", 16),
-                cfg.get("lora_dropout", 0.0),
-            ),
-        )
+    assignments = lora_assignments(cfg)
+    matched = {pattern: [] for pattern, _, _ in assignments}
+    for name, module in policy.named_modules():
+        if not isinstance(module, nn.Linear):
+            continue
+        for pattern, _, _ in assignments:
+            if pattern.fullmatch(name):
+                matched[pattern].append(name)
+                break
+    missing = [pattern.pattern for pattern, names in matched.items() if not names]
+    if missing:
+        raise ValueError("No Pi-0 projections matched: " + "; ".join(missing))
+    targets = []
+    for pattern, rank, alpha in assignments:
+        for name in matched[pattern]:
+            parent_name, leaf = name.rsplit(".", 1)
+            parent = policy.get_submodule(parent_name)
+            setattr(
+                parent,
+                leaf,
+                LoRALinear(
+                    getattr(parent, leaf),
+                    rank,
+                    alpha,
+                    cfg.get("lora_dropout", 0.0),
+                ),
+            )
+            targets.append(name)
     for name in PROJECTIONS:
         policy.model.get_submodule(name).float().requires_grad_(True)
     return targets

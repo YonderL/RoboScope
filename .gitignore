@@ -31,3 +31,11 @@ lerobot-before-cuda-fix.txt
 first_frame.png
 test_robosuite.py
 download_libero_bg.sh
+download_robotwin_bg.sh
+# Local hardware notes and one-off probes. Not part of the published recipes.
+docs/pi0_pro5000_continuation.md
+scripts/continue_pi0_pro5000.sh
+scripts/benchmark_pi0_microbatch.py
+# Rebuild publication formats with `roboscope report --study all`.
+docs/assets/*.pdf
+docs/assets/*.svg

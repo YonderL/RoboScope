@@ -4,29 +4,29 @@ This layout follows the responsibility separation of [verl-vla](https://github.c
 
 ```mermaid
 flowchart LR
-    C[Scientific recipe + local paths] --> W[Workflow / run contract]
-    W --> D[HDF5 adapter + normalization + cache]
-    D --> T[ACT or diffusion trainer]
+    C[Scientific recipe + local paths] --> W[Workflow for one recipe family]
+    W --> D[HDF5 or HF/LeRobot adapter]
+    D --> T[Trainer for that policy]
     T --> K[Checkpoint + optimizer + RNG state]
     K --> E[Evaluation worker]
     E --> P[Policy prediction]
-    P --> Q[Per-episode action queue / TE]
-    Q --> S[LIBERO environment pool]
+    P --> Q[Per-episode action queue]
+    Q --> S[LIBERO environment]
     S --> E
-    E --> R[Episode records + checkpoint identity]
-    R --> A[Auditor + paired analysis + figures]
+    E --> R[Portable episode or native report]
+    R --> A[Separate ACT/DP and VLA auditors]
 ```
 
 | Module | Owns | Does not own |
 |---|---|---|
-| `data` | split, indexing, statistics, sequence alignment, cached pixels | simulator reset or checkpoint selection |
-| `policies` | ACT / DP forward, conditioning, normalization and prediction | task scheduling or simulator handles |
+| `data` | split, indexing, statistics, sequence alignment, cached pixels; HF/LeRobot adapters for SmolVLA and Pi-0 | simulator reset or checkpoint selection |
+| `policies` | ACT, DP, Pi-0 LoRA, SmolVLA and RLT forward passes | task scheduling or simulator handles |
 | `envs` | observation conversion, fixed init, action application, success predicate | learned policy weights |
 | `trainers` | losses, optimizers, schedules, EMA and checkpoints | GPU selection |
 | `evaluation` | histories, execution schedule, model calls and episode records | training updates |
-| `runtime` | UUID/EGL mapping, process supervision | model math |
-| `workflows` | configuration, provenance, process composition | loss formulas |
-| `reporting` | integrity checks, aggregation, figures | CUDA or simulator execution |
+| `runtime` | UUID/EGL mapping, shared step loop, process supervision | model math |
+| `workflows` | one module per recipe family: ACT/DP, HDF5 SmolVLA, official SmolVLA, HDF5 Pi-0, HF Pi-0, RLT | loss formulas |
+| `reporting` | ACT/DP paired audit (`figures`) and native VLA audit (`vla`, `native`) | CUDA or simulator execution |
 
 ## Current tensor contract
 
@@ -36,6 +36,12 @@ flowchart LR
 - Action: unnormalized controller command `[B,K,7]`. First six values are OSC delta commands, last value is gripper command. Clip to controller bounds at execution.
 - Episode reset clears history, action queue and TE state. DP gets a dedicated random generator per task/init episode.
 - `eef_pos` is recorded for analysis only; it is not passed to either policy.
+
+## Two published evidence tracks
+
+ACT/DP records live in `results/libero_spatial/` and use the 128×128, 9D joint, fixed-initial-state contract above. Native VLA records live in `results/vla_spatial/snapshot.json`. That snapshot checks episode coverage and success counts before drawing. It does not convert a native report into an ACT/DP initial-state id. Training curves for SmolVLA and Pi-0 share a figure only as logged losses; the axis label states that the objectives are different and are not a ranking.
+
+`python -m roboscope report --study baseline` redraws the ACT/DP gallery. `--study vla` redraws the native gallery. `--study all` redraws both.
 
 ## Adding a policy
 

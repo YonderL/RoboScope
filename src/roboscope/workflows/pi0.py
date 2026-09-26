@@ -73,10 +73,20 @@ def train_pi0(cfg, resume=False):
         lock.close()
 
 
-def evaluate_pi0(source, output, checkpoint="final", episodes=50, resume=False):
+def evaluate_pi0(
+    source,
+    output,
+    checkpoint="final",
+    episodes=50,
+    resume=False,
+    libero_root=None,
+    gpu_model=None,
+    task_ids=None,
+):
     import torch
 
     from roboscope.data.libero import digest, save_json
+    from roboscope.evaluation.pi0 import evaluation_context
     from roboscope.runtime.gpu import cards_and_envs, run_workers
 
     source, output = Path(source).resolve(), Path(output).resolve()
@@ -84,10 +94,11 @@ def evaluate_pi0(source, output, checkpoint="final", episodes=50, resume=False):
         raise ValueError("Pi-0 evaluation requires a separate output directory")
     cfg = json.loads((source / "config.json").read_text())
     manifest = json.loads((source / "manifest.json").read_text())
+    _, tasks = evaluation_context(cfg, manifest, libero_root)
     weight = source / f"{checkpoint}.pt"
     if not weight.is_file():
         raise FileNotFoundError(weight)
-    for task in manifest["tasks"]:
+    for task in tasks:
         if len(torch.load(task["init"], weights_only=False, map_location="cpu")) < episodes:
             raise ValueError("Insufficient unique initial states; wrapping is forbidden")
     contract = {
@@ -96,6 +107,9 @@ def evaluate_pi0(source, output, checkpoint="final", episodes=50, resume=False):
         "checkpoint_sha256": digest(weight),
         "episodes_per_task": episodes,
         "source_config": cfg,
+        "libero_root": str(Path(libero_root).resolve()) if libero_root else None,
+        "gpu_model": gpu_model or cfg.get("gpu_model", "4090"),
+        "task_ids": task_ids,
     }
     lock = lock_run(output)
     try:
@@ -107,7 +121,7 @@ def evaluate_pi0(source, output, checkpoint="final", episodes=50, resume=False):
             if set(p.name for p in output.iterdir()) != {".launcher.lock"}:
                 raise ValueError("Evaluation output is not empty")
             save_json(path, contract)
-        cards, envs = cards_and_envs()
+        cards, envs = cards_and_envs(gpu_model or cfg.get("gpu_model", "4090"))
         save_json(output / "gpu_mapping.json", cards)
         commands = [
             [
@@ -127,6 +141,13 @@ def evaluate_pi0(source, output, checkpoint="final", episodes=50, resume=False):
             ]
             for shard in range(2)
         ]
+        for command in commands:
+            if libero_root:
+                command += ["--libero-root", str(Path(libero_root).resolve())]
+            if gpu_model:
+                command += ["--gpu-model", gpu_model]
+            if task_ids is not None:
+                command += ["--task-ids", *map(str, task_ids)]
         run_workers(commands, envs, [output / f"eval_shard{i}.log" for i in range(2)])
         from roboscope.evaluation.pi0 import aggregate_evaluation
 

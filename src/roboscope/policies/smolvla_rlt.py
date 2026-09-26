@@ -26,7 +26,7 @@ def image_features_from_prefix(features, valid, attention, language_length):
 
 
 def load_sft(cfg, manifest, device):
-    from roboscope.trainers.pi0 import manifest_digest
+    from roboscope.runtime.training import manifest_digest
 
     path = cfg["sft_checkpoint"]
     if digest(path) != cfg["sft_sha256"]:

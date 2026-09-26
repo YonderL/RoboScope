@@ -56,5 +56,5 @@ if ((skip_eval)); then exit 0; fi
 episodes=50
 if ((smoke)); then episodes=1; fi
 "$PYTHON" -m roboscope evaluate --source "$OUTPUT_ROOT" \
-  --output "${OUTPUT_ROOT}/evaluation_final" --checkpoint final --episodes "$episodes" --ta 50 \
+  --output "${OUTPUT_ROOT}/evaluation_final" --checkpoint final --episodes "$episodes" --ta 10 \
   "${start_args[@]}" "${resume_args[@]}"

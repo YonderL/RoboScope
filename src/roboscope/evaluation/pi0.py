@@ -24,6 +24,39 @@ def _digest(path):
     return result.hexdigest()
 
 
+def evaluation_context(cfg, manifest, libero_root=None):
+    """Resolve HF task assets by language, leaving the training contract untouched."""
+    effective = dict(cfg)
+    if manifest.get("dataset_format") != "lerobot_v3":
+        return effective, manifest["tasks"]
+    if libero_root is None:
+        raise ValueError("HF Spatial evaluation requires --libero-root")
+    root = Path(libero_root).resolve()
+    tasks = []
+    for task in manifest["tasks"]:
+        name = task["language"].replace(" ", "_")
+        bddl = root / "bddl_files/libero_spatial" / f"{name}.bddl"
+        initial = root / "init_files/libero_spatial" / f"{name}.pruned_init"
+        tasks.append(
+            {
+                **task,
+                "name": name,
+                "bddl": str(bddl),
+                "init": str(initial),
+                "bddl_sha256": _digest(bddl),
+                "init_sha256": _digest(initial),
+            }
+        )
+    effective.update(
+        libero_root=str(root),
+        data_root=manifest["dataset_root"],
+        image_size=manifest["image_size"],
+        image_convention="opengl",
+        image_rotation=180,
+    )
+    return effective, tasks
+
+
 def _save_json(path, value):
     path = Path(path)
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -230,6 +263,9 @@ def _predict(model, obs, task, cfg, generator):
 
     start = time.perf_counter()
     batch = observation_batch(obs, task, "cuda")
+    if cfg.get("image_rotation") == 180:
+        for camera in ("agentview_rgb", "eye_in_hand_rgb"):
+            batch[camera] = batch[camera].flip(-2, -1)
     noise = torch.randn(
         (1, cfg["chunk_size"], cfg["max_action_dim"]), generator=generator, device="cuda", dtype=torch.float32
     )
@@ -337,26 +373,45 @@ def run_episode(model, env, task, initial_states, initial_id, cfg, video_path=No
     }
 
 
-def evaluate_shard(run, output, checkpoint="final", shard=0, episodes=50, max_tasks=None):
+def evaluate_shard(
+    run,
+    output,
+    checkpoint="final",
+    shard=0,
+    episodes=50,
+    max_tasks=None,
+    libero_root=None,
+    gpu_model=None,
+    task_ids=None,
+):
     import numpy as np
     import torch
 
     from roboscope.envs.libero import setup_libero
     from roboscope.policies.pi0 import Pi0Policy
-    from roboscope.runtime.common import require_4090, seed_all
+    from roboscope.runtime.common import require_gpu, seed_all
 
     if shard not in (0, 1) or episodes < 1 or (max_tasks is not None and not 1 <= max_tasks <= 10):
         raise ValueError("Invalid shard, episode count, or maximum task count")
     if checkpoint not in ("final", "best"):
         raise ValueError("Evaluation checkpoint must be final or validation-loss best")
-    require_4090()
     run, output = Path(run).resolve(), Path(output).resolve()
-    cfg = json.loads((run / "config.json").read_text())
+    training_cfg = json.loads((run / "config.json").read_text())
+    require_gpu(gpu_model or training_cfg.get("gpu_model", "4090"))
     manifest = json.loads((run / "manifest.json").read_text())
-    tasks = sorted(manifest["tasks"], key=lambda task: task["id"])
+    cfg, resolved_tasks = evaluation_context(training_cfg, manifest, libero_root)
+    tasks = sorted(resolved_tasks, key=lambda task: task["id"])
     if len(tasks) != 10 or len({task["id"] for task in tasks}) != 10:
         raise ValueError("Pi0 evaluator requires all ten Spatial tasks in the training manifest")
     tasks = tasks[:max_tasks] if max_tasks is not None else tasks
+    if task_ids is not None:
+        if (
+            not task_ids
+            or len(set(task_ids)) != len(task_ids)
+            or not set(task_ids) <= {t["id"] for t in tasks}
+        ):
+            raise ValueError("Invalid task subset")
+        tasks = [t for t in tasks if t["id"] in task_ids]
     if not 1 <= cfg["action_horizon"] <= cfg["chunk_size"]:
         raise ValueError("Execution chunk exceeds prediction chunk")
     if cfg["rollout_horizon"] < 1 or cfg["settle_steps"] < 0:
@@ -379,8 +434,9 @@ def evaluate_shard(run, output, checkpoint="final", shard=0, episodes=50, max_ta
         },
         "settle_action": [0.0] * 6 + [-1.0],
         "control_freq": 20,
-        "camera_resolution": 128,
-        "image_convention": "opencv",
+        "camera_resolution": cfg.get("image_size", 128),
+        "image_convention": cfg.get("image_convention", "opencv"),
+        "image_rotation_degrees": cfg.get("image_rotation", 0),
         "action_clip": [-1, 1],
         "state": "eef_pos + quat_xyzw_to_axisangle + gripper_qpos (8D)",
         "noise_rng": "independent CUDA generator per task/init, seed=eval_seed+1000*task_id+init_id",
@@ -404,6 +460,13 @@ def evaluate_shard(run, output, checkpoint="final", shard=0, episodes=50, max_ta
         "shard_task_ids": [task["id"] for task in tasks if task["id"] % 2 == shard],
         "smoke": episodes != 50 or len(tasks) != 10,
         "protocol": protocol,
+        "benchmark_tasks": tasks,
+        "gpu_model": gpu_model or cfg.get("gpu_model", "4090"),
+    }
+    from importlib.metadata import version
+
+    metadata["environment"] = {
+        name: version(name) for name in ("torch", "mujoco", "robosuite", "lerobot", "hf-libero")
     }
     metadata_path = folder / "metadata.json"
     if metadata_path.exists() and json.loads(metadata_path.read_text()) != metadata:
@@ -428,15 +491,18 @@ def evaluate_shard(run, output, checkpoint="final", shard=0, episodes=50, max_ta
             torch.set_num_threads(cfg.get("cpu_threads", 4))
             seed_all(cfg["eval_seed"])
             saved = torch.load(weight, map_location="cpu", weights_only=False)
-            if saved.get("config") != cfg:
+            if saved.get("config") != training_cfg:
                 raise ValueError("Checkpoint config differs from the training run contract")
             if saved.get("manifest") != manifest:
                 raise ValueError("Checkpoint data/normalization differs from the training manifest")
-            model = Pi0Policy(cfg, manifest)
+            model = Pi0Policy(training_cfg, manifest)
             model.load_trainable_state_dict(saved["adapter"])
             model = model.cuda().eval()
             del saved
             Env = setup_libero(cfg, folder)
+            import robosuite.macros as macros
+
+            macros.IMAGE_CONVENTION = cfg.get("image_convention", "opencv")
             for task in pending_tasks:
                 initial_states = torch.load(task["init"], map_location="cpu", weights_only=False)
                 if len(initial_states) < episodes:
@@ -447,8 +513,8 @@ def evaluate_shard(run, output, checkpoint="final", shard=0, episodes=50, max_ta
                 active_task = task["id"]
                 env = Env(
                     bddl_file_name=task["bddl"],
-                    camera_heights=128,
-                    camera_widths=128,
+                    camera_heights=cfg.get("image_size", 128),
+                    camera_widths=cfg.get("image_size", 128),
                     controller="OSC_POSE",
                     control_freq=20,
                     hard_reset=True,
@@ -457,7 +523,16 @@ def evaluate_shard(run, output, checkpoint="final", shard=0, episodes=50, max_ta
                     render_gpu_device_id=int(os.environ["MUJOCO_EGL_DEVICE_ID"]),
                 )
                 for key in ("input_max", "input_min", "output_max", "output_min"):
-                    if not np.allclose(getattr(env.env.robots[0].controller, key), task["controller"][key]):
+                    expected_controller = task.get(
+                        "controller",
+                        {
+                            "input_max": 1,
+                            "input_min": -1,
+                            "output_max": [0.05, 0.05, 0.05, 0.5, 0.5, 0.5],
+                            "output_min": [-0.05, -0.05, -0.05, -0.5, -0.5, -0.5],
+                        },
+                    )
+                    if not np.allclose(getattr(env.env.robots[0].controller, key), expected_controller[key]):
                         raise RuntimeError(f"OSC controller {key} mismatch")
                 for initial in remaining:
                     active_initial = initial
@@ -526,8 +601,21 @@ def main():
     parser.add_argument("--shard", type=int, choices=(0, 1), required=True)
     parser.add_argument("--episodes", type=int, default=50)
     parser.add_argument("--max-tasks", type=int)
+    parser.add_argument("--libero-root", type=Path)
+    parser.add_argument("--gpu-model", choices=["4090", "5880", "pro5000"])
+    parser.add_argument("--task-ids", type=int, nargs="+")
     args = parser.parse_args()
-    evaluate_shard(args.run, args.output, args.checkpoint, args.shard, args.episodes, args.max_tasks)
+    evaluate_shard(
+        args.run,
+        args.output,
+        args.checkpoint,
+        args.shard,
+        args.episodes,
+        args.max_tasks,
+        args.libero_root,
+        args.gpu_model,
+        args.task_ids,
+    )
 
 
 if __name__ == "__main__":

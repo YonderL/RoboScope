@@ -112,6 +112,36 @@ def test_injection_preserves_frozen_vision_and_adapter_roundtrip():
         inject_lora(fake_model(), {"lora_dropout": 0.1, "gradient_checkpointing": True})
 
 
+def test_grouped_lora_uses_separate_ranks_for_vlm_and_expert():
+    model = fake_model()
+    for branch in (
+        model.model.paligemma_with_expert.paligemma.model.language_model,
+        model.model.paligemma_with_expert.gemma_expert.model,
+    ):
+        layer = branch.layers[0]
+        layer.mlp = nn.ModuleDict({name + "_proj": nn.Linear(4, 4) for name in ("gate", "up", "down")})
+    targets = inject_lora(
+        model,
+        {
+            "lora_groups": [
+                {"name": "vlm_attention", "rank": 2, "alpha": 2},
+                {"name": "vlm_ffn", "rank": 2, "alpha": 2},
+                {"name": "expert_attention", "rank": 4, "alpha": 4},
+                {"name": "expert_ffn", "rank": 4, "alpha": 4},
+            ]
+        },
+    )
+    assert len(targets) == 14
+    vlm_q = model.model.paligemma_with_expert.paligemma.model.language_model.layers[0].self_attn.q_proj
+    expert_q = model.model.paligemma_with_expert.gemma_expert.model.layers[0].self_attn.q_proj
+    expert_gate = model.model.paligemma_with_expert.gemma_expert.model.layers[0].mlp.gate_proj
+    assert vlm_q.lora_A.shape[0] == 2
+    assert expert_q.lora_A.shape[0] == 4 and expert_gate.lora_A.shape[0] == 4
+    assert not any(
+        p.requires_grad for p in model.model.paligemma_with_expert.paligemma.model.vision_tower.parameters()
+    )
+
+
 def test_language_images_and_normalization_contract():
     policy = bare_policy()
     prepared = policy.prepare_batch(batch(), include_action=True)

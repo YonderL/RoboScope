@@ -4,15 +4,16 @@ import json
 from pathlib import Path
 
 
-def read_evaluation(directory, episodes_per_task=50):
+def read_evaluation(directory, episodes_per_task=50, task_ids=None):
     directory = Path(directory)
+    task_ids = list(range(10)) if task_ids is None else task_ids
     records, identities = [], []
     for shard_id in range(2):
         shard = directory / f"shard{shard_id}"
         meta = json.loads((shard / "config.json").read_text())
         complete = json.loads((shard / "complete.json").read_text())
         rows = [json.loads(s) for s in (shard / "episodes.jsonl").read_text().splitlines()]
-        expected = {(t, i) for t in range(10) if t % 2 == shard_id for i in range(episodes_per_task)}
+        expected = {(t, i) for t in task_ids if t % 2 == shard_id for i in range(episodes_per_task)}
         keys = {(r["task_id"], r["initial_state_id"]) for r in rows}
         if len(rows) != len(keys) or keys != expected or complete["episodes"] != len(rows):
             raise ValueError(f"Duplicate, missing, or unexpected episodes: {shard}")
