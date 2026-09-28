@@ -4,31 +4,37 @@
 
 [中文](README.zh-CN.md) · [Quick start](docs/quickstart.md) · [Architecture](docs/architecture.md) · [Experiments](docs/experiments.md) · [Research findings](docs/findings.md) · [Reproduction](docs/reproducibility.md)
 
-RoboScope implements suite-conditioned **ACT and Diffusion Policy on LIBERO-Spatial**, with fixed-initial-state evaluation, action-execution ablations, per-episode records, and reproducible figures. It also provides a **language-conditioned Pi-0 LoRA fine-tuning pipeline for two RTX 4090s**; see the [Pi-0 runbook and validation limits](docs/pi0_lora_spatial.md). It is a research project: results and limitations are reported together.
+RoboScope trains and evaluates **ACT, Diffusion Policy, SmolVLA and Pi-0 LoRA on LIBERO-Spatial**, with per-episode records, explicit experiment configurations and reproducible training/evaluation figures.
 
-![ACT and DP comparison](docs/assets/act_vs_dp.png)
+![Official per-task success rates for all four policies](docs/assets/policy_success_rates.png)
 
-## Current closed-loop scores
+## Official closed-loop results (2026-09-28)
 
-Each cell is successes out of 50 fixed trials. Rows are the same LIBERO-Spatial task, matched by name. ACT and DP use their HDF5 task order; SmolVLA uses the native benchmark order, where “on the ramekin” is task 5 rather than task 7. Pi-0 uses the same names as ACT and DP.
+SR = successful episodes / evaluated episodes. Each cell shows SR and successes out of 50 trials; each policy has 500 trials total and training seed 0. Each task picks up the black bowl at the named location and places it on the plate. Rows are the same LIBERO-Spatial task, matched by name. ACT and DP use their HDF5 task order; SmolVLA uses the native benchmark order, where “on the ramekin” is task 5 rather than task 7. Pi-0 uses the same names as ACT and DP.
 
-| Task | ACT | DP | SmolVLA | Pi-0 |
+| Task | ACT | DP | SmolVLA | Pi-0 LoRA |
 |---|---:|---:|---:|---:|
-| Between plate and ramekin | 42/50 | 48/50 | 47/50 | 50/50 |
-| Table center | 48/50 | 50/50 | 49/50 | 49/50 |
-| Top drawer | 45/50 | 45/50 | 44/50 | 46/50 |
-| Next to cookie box | 48/50 | 47/50 | 49/50 | 47/50 |
-| Next to plate | 38/50 | 35/50 | 38/50 | 37/50 |
-| Next to ramekin | 41/50 | 49/50 | 47/50 | 42/50 |
-| On cookie box | 46/50 | 47/50 | 45/50 | 45/50 |
-| On the ramekin | 34/50 | 37/50 | 47/50 | 42/50 |
-| On the stove | 43/50 | 44/50 | 42/50 | 38/50 |
-| On the wooden cabinet | 49/50 | 42/50 | 40/50 | 42/50 |
+| Between plate and ramekin | 84% (42/50) | 96% (48/50) | 94% (47/50) | 100% (50/50) |
+| Table center | 96% (48/50) | 100% (50/50) | 98% (49/50) | 98% (49/50) |
+| Top drawer | 90% (45/50) | 90% (45/50) | 88% (44/50) | 92% (46/50) |
+| Next to cookie box | 96% (48/50) | 94% (47/50) | 98% (49/50) | 94% (47/50) |
+| Next to plate | 76% (38/50) | 70% (35/50) | 76% (38/50) | 74% (37/50) |
+| Next to ramekin | 82% (41/50) | 98% (49/50) | 94% (47/50) | 84% (42/50) |
+| On cookie box | 92% (46/50) | 94% (47/50) | 90% (45/50) | 90% (45/50) |
+| On the ramekin | 68% (34/50) | 74% (37/50) | 94% (47/50) | 84% (42/50) |
+| On the stove | 86% (43/50) | 88% (44/50) | 84% (42/50) | 76% (38/50) |
+| On the wooden cabinet | 98% (49/50) | 84% (42/50) | 80% (40/50) | 84% (42/50) |
 | **Suite** | **434/500 (86.8%)** | **444/500 (88.8%)** | **448/500 (89.6%)** | **438/500 (87.6%)** |
 
 ACT is K=8 chunk execution at epoch 32. DP is the 30k final checkpoint, DDIM=10, Ta=8. SmolVLA is the 100k official Spatial checkpoint, executing 10 of 50 predicted actions. Pi-0 is the 30k HF Spatial LoRA checkpoint, executing 8 actions, on MuJoCo 3.3.2 for every task.
 
-The “on the ramekin” row is the MuJoCo 3.3.2 re-evaluation on PRO 5000s for ACT, DP, and SmolVLA. Their other nine tasks stay on the earlier published runs. Pi-0’s whole table is the new MuJoCo 3.3.2, 256px, 8D-state evaluation. Image size, proprioception, and rollout budget still differ, so this is a side-by-side of the current scores, not one shared protocol.
+The “on the ramekin” row is the MuJoCo 3.3.2 re-evaluation on PRO 5000s for ACT, DP, and SmolVLA. Their other nine tasks stay on the earlier published runs. Pi-0’s whole table is the new MuJoCo 3.3.2, 256px, 8D-state evaluation. Image size, proprioception, and rollout budget still differ, the table is the official result after merging the corrected reruns, with each policy retaining its own evaluation protocol. [Official provenance and checkpoint identities](results/official_spatial/summary.json) · [Rerun configurations](results/mujoco332/protocol.json).
+
+## Experiment progress
+
+All four training runs and their 50-trial-per-task evaluations are complete: ACT K8 at epoch 32 (56,064 updates), DP final EMA at 30k updates, native SmolVLA at 100k, and HF Spatial Pi-0 LoRA at 30k. The corrected on-ramekin reruns change ACT from 30% to 68%, DP from 4% to 74%, and SmolVLA from 20% to 94%; these are included above. Pi-0 LoRA scores 84% on that task.
+
+Training recipes: [ACT](configs/libero_spatial/act_baseline.json) · [DP](configs/libero_spatial/diffusion.json) · [SmolVLA](configs/libero_spatial/smolvla_official.json) · [Pi-0 LoRA](configs/libero_spatial/pi0_lora_hf_spatial.json). See the [evaluation report](docs/evaluation_20260926.md) for the rerun protocols and merge accounting.
 
 ## Results that changed our interpretation
 
@@ -55,13 +61,11 @@ Same seed 0, ten tasks, 50 fixed initial states per task, two RGB cameras, 7D OS
 
 **SmolVLA, official Spatial protocol:** paper architecture on the released 256×256 dataset, 8D end-effector state, 100k updates, seed 0. Executing 10 of 50 predicted actions scores **448/500 (89.6%)** after replacing the “on the ramekin” task with the MuJoCo 3.3.2 re-evaluation (47/50; the earlier run of that task was 10/50). In-training rollouts replan every step and are a different number (68–73% on 100 episodes). Recipe: [smolvla_official.json](configs/libero_spatial/smolvla_official.json). Per-task scores are in the table above.
 
-![SmolVLA native evaluation](docs/assets/smolvla_evaluation.png)
-
 **Pi-0 LoRA, HF Spatial:** 30k updates, seed 0, evaluated for 50 trials on every task under MuJoCo 3.3.2. Closed-loop success is **438/500 (87.6%)**. The training curve is below. Recipe: [pi0_lora_hf_spatial.json](configs/libero_spatial/pi0_lora_hf_spatial.json). The older HDF5 [Pi-0 runbook](docs/pi0_lora_spatial.md) is a separate path and is not the score in the table.
 
 ![VLA training evidence](docs/assets/vla_training.png)
 
-**Other SmolVLA paths, without a published success rate:** the HDF5 recipe still targets the shared ACT/DP evaluator ([smolvla_spatial.md](docs/smolvla_spatial.md)). RLT post-training adds a learned RL token and a Gaussian actor/twin critic on frozen SFT features, executes 10 steps, and keeps a matched 10-step SFT control ([smolvla_rlt_spatial.md](docs/smolvla_rlt_spatial.md)). Bounded simulator tests pass; success-rate gains have not been measured. Preview with `bash scripts/posttrain_smolvla_rlt_spatial.sh --preview`.
+**Other SmolVLA paths, without a final independent benchmark:** the HDF5 recipe still targets the shared ACT/DP evaluator ([smolvla_spatial.md](docs/smolvla_spatial.md)). RLT post-training adds a learned RL token and a Gaussian actor/twin critic on frozen SFT features, executes 10 steps, and keeps a matched 10-step SFT control ([smolvla_rlt_spatial.md](docs/smolvla_rlt_spatial.md)). RLT is now in online training: the 2026-09-28 record has 352 online episodes, 273 successes (77.6%), and 55,630 accumulated environment steps. This is training rollout SR; independent benchmark SR and gains over SFT remain unmeasured. Preview with `bash scripts/posttrain_smolvla_rlt_spatial.sh --preview`.
 
 Run the stages separately with `--stage token`, `--stage warmup`, `--stage online`, and `--stage evaluate`. Freeze the RL token before collecting feature replay; online learning continues collecting new rollouts. See the [step-by-step commands](docs/smolvla_rlt_spatial.md#按阶段执行).
 
@@ -71,13 +75,14 @@ Run the stages separately with `--stage token`, `--stage warmup`, `--stage onlin
 
 ```bash
 python -m pip install -e '.[report,test]'
+python scripts/export_official_results.py
 python -m roboscope report --study all
-python -m pytest tests/test_results.py tests/test_native_results.py tests/test_cli.py
+python -m pytest tests/test_results.py tests/test_native_results.py tests/test_followup_results.py tests/test_official_results.py tests/test_cli.py
 ```
 
-This path needs no GPU, simulator, datasets, or checkpoint download. ACT/DP figures are rebuilt from [audited CSV records](results/libero_spatial/episodes.csv). VLA figures are rebuilt from [results/vla_spatial/snapshot.json](results/vla_spatial/snapshot.json). Success rates are checked against the episode records. PNG, PDF and SVG outputs are generated under `docs/assets/`.
+This path needs no GPU, simulator, datasets, or checkpoint download. The official comparison is derived from [per-task records](results/official_spatial/per_task.csv) and their audited episode sources. ACT/DP figures are rebuilt from [audited CSV records](results/libero_spatial/episodes.csv). VLA figures are rebuilt from [results/vla_spatial/snapshot.json](results/vla_spatial/snapshot.json). Success rates are checked against the episode records. PNG, PDF and SVG outputs are generated under `docs/assets/`.
 
-For training and rollout evaluation, follow the [tested environment and data setup](docs/quickstart.md). Training/evaluation commands preview the plan unless `--start` is supplied. Formal runs were measured on Python 3.12, PyTorch 2.7.1+cu118 and two RTX 4090s.
+For training and rollout evaluation, follow the [tested environment and data setup](docs/quickstart.md). Training/evaluation commands preview the plan unless `--start` is supplied. Historical ACT/DP runs used two RTX 4090s; corrected reruns and the Pi-0 evaluation used RTX PRO 5000, PyTorch 2.7.1+cu128 and MuJoCo 3.3.2.
 
 ## Code map
 
@@ -90,16 +95,22 @@ src/roboscope/
   evaluation/    # matched ACT–DP protocol and HF Pi-0 closed-loop adapter
   runtime/       # GPU/EGL binding, checkpoint/RNG utilities, worker supervision
   workflows/     # one entry per recipe family; no shared loss formulas
-  reporting/     # ACT/DP paired audit and a separate native VLA audit
+  reporting/     # episode audits, official task alignment, training/evaluation plots
 configs/         # path-independent scientific recipes
 examples/        # complete command sequences
-results/         # baseline, VLA training, and MuJoCo 3.3.2 follow-up records
+results/         # official comparison, historical evidence, and corrected reruns
 scripts/         # export, train entrypoints, release allowlist
 ```
 
 Structure is inspired by [verl-vla](https://github.com/verl-project/verl-vla)'s separation of workflows, training, and integrations. RoboScope does **not** depend on verl or claim its distributed/RL capabilities.
 
 ## Research gallery
+
+Historical results before the on-ramekin correction:
+
+![Historical ACT and DP comparison](docs/assets/act_vs_dp.png)
+
+![Historical SmolVLA native evaluation](docs/assets/smolvla_evaluation.png)
 
 ![Checkpoint selection](docs/assets/checkpoint_selection.png)
 
@@ -109,7 +120,7 @@ Structure is inspired by [verl-vla](https://github.com/verl-project/verl-vla)'s 
 
 ## Reproduction status
 
-Published metrics come from the archived pre-refactor experiment implementation. The packaged implementation preserves model math and evaluation scheduling; the validation record describes what has actually been tested after refactoring. Re-running an entire benchmark after refactoring is a separate validation step, not implied by import/unit tests. See [validation](docs/validation.md) and [migration](docs/migration.md).
+Historical ACT/DP metrics come from the archived experiment implementation. Corrected on-ramekin reruns and the complete Pi-0 LoRA evaluation have their own versioned records and configurations. The official table derives its task selection from those sources. The validation record distinguishes code checks from full rollout evaluations. See [validation](docs/validation.md) and [migration](docs/migration.md).
 
 ## Contributing and attribution
 

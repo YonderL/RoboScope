@@ -1,6 +1,7 @@
 """Configure local LIBERO assets and BF16, then use the unmodified LeRobot trainer."""
 
 import argparse
+import os
 import runpy
 import sys
 from pathlib import Path
@@ -18,7 +19,7 @@ def main():
     import torch
     from torch.utils.data import DataLoader as _DataLoader
 
-    from roboscope.runtime.common import require_4090
+    from roboscope.runtime.common import require_gpu
 
     class _DropLastLoader(_DataLoader):
         """Keep every compiled batch at 64. The epoch tail is only 42 frames."""
@@ -29,7 +30,8 @@ def main():
             super().__init__(*args, **kwargs)
 
     torch.utils.data.DataLoader = _DropLastLoader
-    require_4090()
+    # Training stays on the last 4090 unless a UUID-masked worker sets this.
+    require_gpu(os.environ.get("ROBOSCOPE_GPU_MODEL", "4090"))
     torch.set_num_threads(4)
     # SmolVLA has use_amp but no dtype field. Native LeRobot reads this autocast
     # default when constructing Accelerate; explicitly request BF16, not FP16.

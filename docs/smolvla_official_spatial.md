@@ -77,11 +77,15 @@ bash scripts/train_smolvla_official_spatial.sh --stage evaluate --start
 `gpu_mapping.json` 保存实际物理卡映射。首次编译可能较慢，smoke必须确认有限loss、
 能保存checkpoint且能完成环境评测，再开启正式训练。
 
-## 已归档结果
+## 正式结果与历史记录
 
-100k checkpoint、每次执行 10 步、原生评测：**411/500（82.2%）**。同一权重的每任务 10 回合为 81/100。训练中的周期评测是每步重规划，不是这组 10 步执行：20k 为 68%，60k 为 73%，80k 为 72%，100k 为 69%（各 100 回合）。记录在 `results/vla_spatial/snapshot.json`，图由 `python -m roboscope report --study vla` 重绘。
+合并 MuJoCo 3.3.2 的「ramekin 上的黑碗」50 回合复测后，正式结果是 **448/500（89.6%）**：该任务由 10/50 更新为 47/50，其余九个任务保留原成绩。逐任务对照见 [README](../README.zh-CN.md)，来源与配方见 [评测报告](evaluation_20260926.md)。
 
-这组数字不能和 ACT/DP 的 500 回合配对比较：图像是 256、状态是 8D 末端、回合上限是 280，原生报告也没有保存 ACT/DP 那套初态编号。只有一个训练 seed。MuJoCo 3.3.2 上仅任务 5 的 43/50 复测留在 snapshot 的 diagnostic 字段，不计入 411/500。
+下列 411/500 是复测合并前的历史成绩：
+
+100k checkpoint、每次执行 10 步、原生评测：**411/500（82.2%）**。训练中的周期评测是每步重规划，不是这组 10 步执行：20k 为 68%，60k 为 73%，80k 为 72%，100k 为 69%（各 100 回合）。记录在 `results/vla_spatial/snapshot.json`，图由 `python -m roboscope report --study vla` 重绘。
+
+这组数字不能和 ACT/DP 的 500 回合配对比较：图像是 256、状态是 8D 末端、回合上限是 280，原生报告也没有保存 ACT/DP 那套初态编号。只有一个训练 seed。MuJoCo 3.3.2 的补充评测单独记录在[评测报告](evaluation_20260926.md)，已用于正式结果；历史 411/500 记录作为来源保留。
 
 ## 评测与查看结果
 

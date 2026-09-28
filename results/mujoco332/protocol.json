@@ -1,0 +1,694 @@
+{
+  "schema": 1,
+  "date": "2026-09-26",
+  "suite": "libero_spatial",
+  "studies": {
+    "act": {
+      "task_ids": [
+        7
+      ],
+      "episodes_per_task": 50,
+      "checkpoint_sha256": "25998665d3fdfa28b1c3ddd0ad13ea5b9433a64b025904e033de027857949d62",
+      "gradient_step": 56064,
+      "training_recipe": "configs/libero_spatial/act_baseline.json",
+      "evaluation_config": {
+        "data_root": "<local-path>",
+        "libero_root": "<local-path>",
+        "output_root": "<local-path>",
+        "chunks": [
+          1,
+          8,
+          16,
+          32
+        ],
+        "seeds": [
+          0,
+          1,
+          2
+        ],
+        "epochs": 32,
+        "batch_size": 32,
+        "workers": 4,
+        "cpu_threads": 4,
+        "split_seed": 2026,
+        "validation_fraction": 0.1,
+        "lr": 1e-05,
+        "weight_decay": 0.0001,
+        "kl_weight": 10.0,
+        "grad_clip": 10.0,
+        "dim_model": 512,
+        "dim_feedforward": 3200,
+        "encoder_layers": 4,
+        "decoder_layers": 1,
+        "vae_layers": 4,
+        "pretrained_backbone": true,
+        "amp": true,
+        "eval_every": 8,
+        "eval_episodes": 50,
+        "eval_seed": 10000,
+        "rollout_horizon": 600,
+        "settle_steps": 5,
+        "temporal_coeff": 0.01,
+        "modes": [
+          "chunk",
+          "replan",
+          "ensemble"
+        ],
+        "video_episodes_per_task": 1,
+        "video_every": 50,
+        "keep_every_checkpoint": false,
+        "policy": "act",
+        "act_model_config": {
+          "data_root": "<local-path>",
+          "libero_root": "<local-path>",
+          "output_root": "<local-path>",
+          "chunks": [
+            1,
+            8,
+            16,
+            32
+          ],
+          "seeds": [
+            0,
+            1,
+            2
+          ],
+          "epochs": 32,
+          "batch_size": 32,
+          "workers": 4,
+          "cpu_threads": 4,
+          "split_seed": 2026,
+          "validation_fraction": 0.1,
+          "lr": 1e-05,
+          "weight_decay": 0.0001,
+          "kl_weight": 10.0,
+          "grad_clip": 10.0,
+          "dim_model": 512,
+          "dim_feedforward": 3200,
+          "encoder_layers": 4,
+          "decoder_layers": 1,
+          "vae_layers": 4,
+          "pretrained_backbone": true,
+          "amp": true,
+          "eval_every": 8,
+          "eval_episodes": 20,
+          "eval_seed": 10000,
+          "rollout_horizon": 600,
+          "settle_steps": 5,
+          "temporal_coeff": 0.01,
+          "modes": [
+            "chunk",
+            "replan",
+            "ensemble"
+          ],
+          "video_episodes_per_task": 1,
+          "video_every": 50,
+          "keep_every_checkpoint": false
+        },
+        "seed": 0,
+        "act_checkpoint": "<local-path>",
+        "eval_envs": 8,
+        "latency_warmup": 5,
+        "latency_repeats": 30,
+        "evaluation_checkpoint": "final",
+        "ddim_steps": 10,
+        "action_horizon": 8,
+        "ddim_ablation": [
+          10
+        ],
+        "action_horizon_ablation": [
+          8
+        ],
+        "evaluation_task_ids": [
+          7
+        ],
+        "evaluation_gpu_model": "pro5000"
+      },
+      "benchmark": {
+        "name": "pick_up_the_black_bowl_on_the_ramekin_and_place_it_on_the_plate",
+        "bddl_sha256": "10239815a9d18ad53e09365d453a362ee54d29ca276e04eef411cf1db8d72940",
+        "init_sha256": "2d2c50b7dcbf861fffa94d576f217ed34153e57487010d7a109a220d4d97189b",
+        "controller": {
+          "type": "OSC_POSE",
+          "input_max": 1,
+          "input_min": -1,
+          "output_max": [
+            0.05,
+            0.05,
+            0.05,
+            0.5,
+            0.5,
+            0.5
+          ],
+          "output_min": [
+            -0.05,
+            -0.05,
+            -0.05,
+            -0.5,
+            -0.5,
+            -0.5
+          ],
+          "kp": 150,
+          "damping_ratio": 1,
+          "impedance_mode": "fixed",
+          "kp_limits": [
+            0,
+            300
+          ],
+          "damping_ratio_limits": [
+            0,
+            10
+          ],
+          "position_limits": null,
+          "orientation_limits": null,
+          "uncouple_pos_ori": true,
+          "control_delta": true,
+          "interpolation": null,
+          "ramp_ratio": 0.2
+        }
+      },
+      "source_sha256": {
+        "shard0/config.json": "eb801422ce9959c535698912071aa029b3eea32c3d558aa9ce210e66935314bf",
+        "shard0/complete.json": "2bc495f19c395d1bddf66fbda06c9e28daa1c796946a20a2cbd6f57d772547c6",
+        "shard1/config.json": "731cb0213be755c513f36fd26116c3408557f1b5973f9ef3d939a0a1630333fd",
+        "shard1/complete.json": "361b5d7731377e407c503339992e381d327b31ec9426fbbd82cc5a34a80efe87"
+      },
+      "episode_source_sha256": "ec7de2e605b1a5992328e3091402ccaed717ca6c498b4ce2c91d9f83d623c29e",
+      "environment_note": "MuJoCo 3.3.2, PyTorch 2.7.1+cu128; PRO 5000. ACT launcher recorded simulator version; DP used the same installed environment."
+    },
+    "dp": {
+      "task_ids": [
+        7
+      ],
+      "episodes_per_task": 50,
+      "checkpoint_sha256": "1478da38dd26ac2b210d399d401073bdaddf5660bc60ca07b5680ed38f9cfa66",
+      "gradient_step": 30000,
+      "training_recipe": "configs/libero_spatial/diffusion.json",
+      "evaluation_config": {
+        "data_root": "<local-path>",
+        "libero_root": "<local-path>",
+        "output_root": "<local-path>",
+        "chunks": [
+          1,
+          8,
+          16,
+          32
+        ],
+        "seeds": [
+          0,
+          1,
+          2
+        ],
+        "epochs": 32,
+        "batch_size": 128,
+        "workers": 4,
+        "cpu_threads": 4,
+        "split_seed": 2026,
+        "validation_fraction": 0.1,
+        "lr": 0.0001,
+        "weight_decay": 1e-06,
+        "kl_weight": 10.0,
+        "grad_clip": 1.0,
+        "dim_model": 512,
+        "dim_feedforward": 3200,
+        "encoder_layers": 4,
+        "decoder_layers": 1,
+        "vae_layers": 4,
+        "pretrained_backbone": false,
+        "amp": true,
+        "eval_every": 8,
+        "eval_episodes": 50,
+        "eval_seed": 10000,
+        "rollout_horizon": 600,
+        "settle_steps": 5,
+        "temporal_coeff": 0.01,
+        "modes": [
+          "chunk",
+          "replan",
+          "ensemble"
+        ],
+        "video_episodes_per_task": 1,
+        "video_every": 50,
+        "keep_every_checkpoint": false,
+        "schema": 3,
+        "act_run": "<local-path>",
+        "task_setting": "suite_task_id",
+        "seed": 0,
+        "train_steps": 30000,
+        "warmup_steps": 500,
+        "ema_decay": 0.9999,
+        "ema_power": 0.75,
+        "validate_every": 1000,
+        "validation_samples": 1024,
+        "obs_horizon": 2,
+        "prediction_horizon": 16,
+        "action_horizon": 8,
+        "diffusion_steps": 100,
+        "ddim_steps": 10,
+        "beta_schedule": "squaredcos_cap_v2",
+        "prediction_type": "epsilon",
+        "ddim_eta": 0.0,
+        "clip_sample": true,
+        "down_dims": [
+          512,
+          1024,
+          2048
+        ],
+        "diffusion_step_embed_dim": 128,
+        "kernel_size": 5,
+        "task_embedding_dim": 64,
+        "spatial_keypoints": 32,
+        "backbone_norm": "groupnorm",
+        "eval_envs": 8,
+        "latency_warmup": 5,
+        "latency_repeats": 30,
+        "evaluation_checkpoint": "final",
+        "ddim_ablation": [
+          10
+        ],
+        "action_horizon_ablation": [
+          8
+        ],
+        "share_rgb_model": false,
+        "crop_shape": [
+          116,
+          116
+        ],
+        "action_normalization": "minmax",
+        "mask_padding_loss": false,
+        "policy": "diffusion",
+        "evaluation_task_ids": [
+          7
+        ],
+        "evaluation_gpu_model": "pro5000"
+      },
+      "benchmark": {
+        "name": "pick_up_the_black_bowl_on_the_ramekin_and_place_it_on_the_plate",
+        "bddl_sha256": "10239815a9d18ad53e09365d453a362ee54d29ca276e04eef411cf1db8d72940",
+        "init_sha256": "2d2c50b7dcbf861fffa94d576f217ed34153e57487010d7a109a220d4d97189b",
+        "controller": {
+          "type": "OSC_POSE",
+          "input_max": 1,
+          "input_min": -1,
+          "output_max": [
+            0.05,
+            0.05,
+            0.05,
+            0.5,
+            0.5,
+            0.5
+          ],
+          "output_min": [
+            -0.05,
+            -0.05,
+            -0.05,
+            -0.5,
+            -0.5,
+            -0.5
+          ],
+          "kp": 150,
+          "damping_ratio": 1,
+          "impedance_mode": "fixed",
+          "kp_limits": [
+            0,
+            300
+          ],
+          "damping_ratio_limits": [
+            0,
+            10
+          ],
+          "position_limits": null,
+          "orientation_limits": null,
+          "uncouple_pos_ori": true,
+          "control_delta": true,
+          "interpolation": null,
+          "ramp_ratio": 0.2
+        }
+      },
+      "source_sha256": {
+        "shard0/config.json": "4234e758e0dc6fbd2afabf687c51be2ee2d9b4259883a0bb6e6c56d619743ec4",
+        "shard0/complete.json": "ef71eed09ef411ddbbc9c34b9336292d38166b485b2fe4a0288869fc2be4b56c",
+        "shard1/config.json": "f326d1eff5f3f8b0af4caa3dff7a3bfa6483756d4f7f800f13caa5927b3f99d0",
+        "shard1/complete.json": "c064c7220de73cbd6969ca7bf79c4398301307ef55327b2ff940ce92117f8157"
+      },
+      "episode_source_sha256": "d8144a53732fc1310a1d9b25a3c341b8fd5ddc28502a1b1330666c39df027a56",
+      "environment_note": "MuJoCo 3.3.2, PyTorch 2.7.1+cu128; PRO 5000. ACT launcher recorded simulator version; DP used the same installed environment."
+    },
+    "smolvla": {
+      "task_ids": [
+        5
+      ],
+      "episodes_per_task": 50,
+      "checkpoint_sha256": "00e97bf8074a70e4bf53a474d99c6e105c52dffd09a10655614297ffc2fe4b83",
+      "gradient_step": 100000,
+      "training_recipe": "configs/libero_spatial/smolvla_official.json",
+      "evaluation_config": {
+        "env": {
+          "type": "libero",
+          "task": "libero_spatial",
+          "fps": 20,
+          "features": {
+            "action": {
+              "type": "ACTION",
+              "shape": [
+                7
+              ]
+            },
+            "pixels/agentview_image": {
+              "type": "VISUAL",
+              "shape": [
+                256,
+                256,
+                3
+              ]
+            },
+            "pixels/robot0_eye_in_hand_image": {
+              "type": "VISUAL",
+              "shape": [
+                256,
+                256,
+                3
+              ]
+            },
+            "robot_state/eef/pos": {
+              "type": "STATE",
+              "shape": [
+                3
+              ]
+            },
+            "robot_state/eef/quat": {
+              "type": "STATE",
+              "shape": [
+                4
+              ]
+            },
+            "robot_state/eef/mat": {
+              "type": "STATE",
+              "shape": [
+                3,
+                3
+              ]
+            },
+            "robot_state/gripper/qpos": {
+              "type": "STATE",
+              "shape": [
+                2
+              ]
+            },
+            "robot_state/gripper/qvel": {
+              "type": "STATE",
+              "shape": [
+                2
+              ]
+            },
+            "robot_state/joints/pos": {
+              "type": "STATE",
+              "shape": [
+                7
+              ]
+            },
+            "robot_state/joints/vel": {
+              "type": "STATE",
+              "shape": [
+                7
+              ]
+            }
+          },
+          "features_map": {
+            "action": "action",
+            "robot_state/eef/pos": "observation.state.eef_pos",
+            "robot_state/eef/quat": "observation.state.eef_quat",
+            "robot_state/eef/mat": "observation.state.eef_mat",
+            "robot_state/gripper/qpos": "observation.state.gripper_qpos",
+            "robot_state/gripper/qvel": "observation.state.gripper_qvel",
+            "robot_state/joints/pos": "observation.state.joint_pos",
+            "robot_state/joints/vel": "observation.state.joint_vel",
+            "pixels/agentview_image": "observation.images.image",
+            "pixels/robot0_eye_in_hand_image": "observation.images.image2"
+          },
+          "max_parallel_tasks": 1,
+          "disable_env_checker": true,
+          "task_ids": [
+            5
+          ],
+          "episode_length": null,
+          "obs_type": "pixels_agent_pos",
+          "render_mode": "rgb_array",
+          "camera_name": "agentview_image,robot0_eye_in_hand_image",
+          "init_states": true,
+          "hard_reset": true,
+          "camera_name_mapping": null,
+          "observation_height": 256,
+          "observation_width": 256,
+          "is_libero_plus": false,
+          "control_mode": "relative"
+        },
+        "eval": {
+          "n_episodes": 50,
+          "batch_size": 10,
+          "use_async_envs": true,
+          "recording": false,
+          "recording_repo_id": null,
+          "recording_private": false
+        },
+        "seed": 0,
+        "output_dir": "<local-path>",
+        "job_name": "smolvla_paper_spatial_final"
+      },
+      "policy_config": {
+        "type": "smolvla",
+        "n_obs_steps": 1,
+        "input_features": {
+          "observation.images.image": {
+            "type": "VISUAL",
+            "shape": [
+              3,
+              256,
+              256
+            ]
+          },
+          "observation.images.image2": {
+            "type": "VISUAL",
+            "shape": [
+              3,
+              256,
+              256
+            ]
+          },
+          "observation.state": {
+            "type": "STATE",
+            "shape": [
+              8
+            ]
+          }
+        },
+        "output_features": {
+          "action": {
+            "type": "ACTION",
+            "shape": [
+              7
+            ]
+          }
+        },
+        "device": "cuda",
+        "use_amp": true,
+        "use_peft": false,
+        "push_to_hub": false,
+        "repo_id": null,
+        "private": null,
+        "tags": null,
+        "license": null,
+        "pretrained_path": "<local-path>",
+        "pretrained_revision": null,
+        "chunk_size": 50,
+        "n_action_steps": 10,
+        "normalization_mapping": {
+          "VISUAL": "IDENTITY",
+          "STATE": "MEAN_STD",
+          "ACTION": "MEAN_STD"
+        },
+        "max_state_dim": 32,
+        "max_action_dim": 32,
+        "resize_imgs_with_padding": [
+          512,
+          512
+        ],
+        "empty_cameras": 0,
+        "adapt_to_pi_aloha": false,
+        "use_delta_joint_actions_aloha": false,
+        "tokenizer_max_length": 48,
+        "num_steps": 10,
+        "use_cache": true,
+        "freeze_vision_encoder": true,
+        "train_expert_only": true,
+        "train_state_proj": true,
+        "optimizer_lr": 0.0001,
+        "optimizer_betas": [
+          0.9,
+          0.95
+        ],
+        "optimizer_eps": 1e-08,
+        "optimizer_weight_decay": 1e-10,
+        "optimizer_grad_clip_norm": 10.0,
+        "scheduler_warmup_steps": 1000,
+        "scheduler_decay_steps": 30000,
+        "scheduler_decay_lr": 2.5e-06,
+        "vlm_model_name": "<local-path>",
+        "load_vlm_weights": true,
+        "add_image_special_tokens": false,
+        "attention_mode": "cross_attn",
+        "prefix_length": 0,
+        "pad_language_to": "max_length",
+        "num_expert_layers": -1,
+        "num_vlm_layers": 16,
+        "self_attn_every_n_layers": 2,
+        "expert_width_multiplier": 0.75,
+        "min_period": 0.004,
+        "max_period": 4.0,
+        "rtc_config": null,
+        "compile_model": false,
+        "compile_mode": "default"
+      },
+      "environment": {
+        "torch": "2.7.1+cu128",
+        "mujoco": "3.3.2",
+        "robosuite": "1.4.0",
+        "hf-libero": "0.1.4",
+        "lerobot": "0.6.1"
+      },
+      "action_steps": 10,
+      "source_sha256": {
+        "eval_info.json": "d23d6eb68deb99fda662d9d5a40931e1edae8860277a5e421b40ec2767ef6838",
+        "identity.json": "e5bf9404ed84111ca64d3dfcebbed8db8df6b16ae2d0f1d97d6854408c75b457"
+      },
+      "identity_note": "Native report order, no explicit saved initial-state IDs; not paired with ACT/DP trials."
+    },
+    "pi0": {
+      "task_ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "episodes_per_task": 50,
+      "checkpoint_sha256": "8a9f98014dea8b5aba02cba766a5ca7ba4512e32a3d3b84c871909fed3a4e9a6",
+      "gradient_step": 30000,
+      "training_recipe": "configs/libero_spatial/pi0_lora_hf_spatial.json",
+      "protocol": {
+        "chunk_size": 50,
+        "max_action_dim": 32,
+        "action_horizon": 8,
+        "num_inference_steps": 10,
+        "rollout_horizon": 220,
+        "settle_steps": 10,
+        "eval_seed": 10000,
+        "settle_action": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          -1.0
+        ],
+        "control_freq": 20,
+        "camera_resolution": 256,
+        "image_convention": "opengl",
+        "image_rotation_degrees": 180,
+        "action_clip": [
+          -1,
+          1
+        ],
+        "state": "eef_pos + quat_xyzw_to_axisangle + gripper_qpos (8D)",
+        "noise_rng": "independent CUDA generator per task/init, seed=eval_seed+1000*task_id+init_id",
+        "checkpoint_selection": "final_training_step",
+        "video_episodes_per_task": 1
+      },
+      "environment": {
+        "torch": "2.7.1+cu128",
+        "mujoco": "3.3.2",
+        "robosuite": "1.4.0",
+        "lerobot": "0.6.1",
+        "hf-libero": "0.1.4"
+      },
+      "benchmark_tasks": [
+        {
+          "id": 0,
+          "name": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate",
+          "bddl_sha256": "9b59eb1287802868ad9bc78d58e6d36d4ba31134e679cfdbdf4b0feb660c959b",
+          "init_sha256": "cbbc73792ce546c9bec181fd328a411d3183074840b282671dee481511381d0a"
+        },
+        {
+          "id": 1,
+          "name": "pick_up_the_black_bowl_from_table_center_and_place_it_on_the_plate",
+          "bddl_sha256": "5e19880ebc844f86b89f63b172aab0b7a89f85b6e6955891f544f0ea7d0795d5",
+          "init_sha256": "27d5b81d739f969e40c72b6c88699e57a91ea61209946b21c593aae5990689cb"
+        },
+        {
+          "id": 2,
+          "name": "pick_up_the_black_bowl_in_the_top_drawer_of_the_wooden_cabinet_and_place_it_on_the_plate",
+          "bddl_sha256": "4371189e11d9fd29bb548ab9a8adcd741bb0ce41bb66c612672d0e8cb29a52a9",
+          "init_sha256": "deef3df529e0bb57658b973bbb3baf02b02922db065c025a73ebfcd11eb54d46"
+        },
+        {
+          "id": 3,
+          "name": "pick_up_the_black_bowl_next_to_the_cookie_box_and_place_it_on_the_plate",
+          "bddl_sha256": "566c65596f3472e752e6522817bff51bbf3ce5159d7bec1d3554e5ead46b1e55",
+          "init_sha256": "ab86fb7b5942dc0fec762eae57e72bf636106b1c10ad8ce57227723d8eb9a81b"
+        },
+        {
+          "id": 4,
+          "name": "pick_up_the_black_bowl_next_to_the_plate_and_place_it_on_the_plate",
+          "bddl_sha256": "c8fbb9effa27b947d04d26862d75273d93cac1806734e53836cd472a08aec1fe",
+          "init_sha256": "f43df2d80042130ac8770590d83f1a1e6fd4df7479aebc392aa2ed6e3bd0b83e"
+        },
+        {
+          "id": 5,
+          "name": "pick_up_the_black_bowl_next_to_the_ramekin_and_place_it_on_the_plate",
+          "bddl_sha256": "53a7516571412a2f46a27cbf8482d3b76dbad4221858c8f6b565d506c274e61d",
+          "init_sha256": "9b6927b6ef03460ab055141e1a1154ad85e5e290058d8ed3a8a314aff911f864"
+        },
+        {
+          "id": 6,
+          "name": "pick_up_the_black_bowl_on_the_cookie_box_and_place_it_on_the_plate",
+          "bddl_sha256": "3d4ccf070c3d9883ae0676f2d888588f98c696ddad71b7694f47c379fc99ef36",
+          "init_sha256": "0627f5f5ce3ef23be546571012be8ef603d93bcb4032bc80feb34937ba580140"
+        },
+        {
+          "id": 7,
+          "name": "pick_up_the_black_bowl_on_the_ramekin_and_place_it_on_the_plate",
+          "bddl_sha256": "10239815a9d18ad53e09365d453a362ee54d29ca276e04eef411cf1db8d72940",
+          "init_sha256": "2d2c50b7dcbf861fffa94d576f217ed34153e57487010d7a109a220d4d97189b"
+        },
+        {
+          "id": 8,
+          "name": "pick_up_the_black_bowl_on_the_stove_and_place_it_on_the_plate",
+          "bddl_sha256": "dd11837141a30d874ebbbfaae20e91ecc67ec85ab3872ceb4cff3abfcbef7cb0",
+          "init_sha256": "ea9cba2814bc166f3682f3f5a97329467839bcf584069cd419191b6c17adae25"
+        },
+        {
+          "id": 9,
+          "name": "pick_up_the_black_bowl_on_the_wooden_cabinet_and_place_it_on_the_plate",
+          "bddl_sha256": "5293e759381b477e126beaf83d738542bbd4d93f522a3eead1066e612bad4a8c",
+          "init_sha256": "08b0ac928dcc524a66d963851a6a4eece9aeb782b38466006e403a70e3287867"
+        }
+      ],
+      "source_sha256": {
+        "shard_0/episodes.jsonl": "c45c4143c7c6205ccff1ec6a23783c159ff2c9c385da138f4842d68f578195c6",
+        "shard_1/episodes.jsonl": "08beff040e497867c65c357ae8a5852c2201fb743c4e602f42d9f738da64de22"
+      }
+    }
+  },
+  "limitations": [
+    "One trained seed per policy. Trial variability is not training-seed uncertainty.",
+    "ACT/DP and SmolVLA use different observations, rollout limits and episode protocols.",
+    "Follow-up GPU and simulator versions differ from historical runs; changes are not isolated causal effects of MuJoCo.",
+    "Concurrent GPU jobs may affect timing; inference latency is not published for these runs."
+  ]
+}

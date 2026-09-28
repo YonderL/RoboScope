@@ -12,8 +12,11 @@ def read_evaluation(directory, episodes_per_task=50, task_ids=None):
         shard = directory / f"shard{shard_id}"
         meta = json.loads((shard / "config.json").read_text())
         complete = json.loads((shard / "complete.json").read_text())
-        rows = [json.loads(s) for s in (shard / "episodes.jsonl").read_text().splitlines()]
         expected = {(t, i) for t in task_ids if t % 2 == shard_id for i in range(episodes_per_task)}
+        raw = shard / "episodes.jsonl"
+        # A task subset can leave one shard empty; still require its completion
+        # marker and checkpoint identity. Missing nonempty shards must fail.
+        rows = [json.loads(s) for s in raw.read_text().splitlines()] if raw.exists() or expected else []
         keys = {(r["task_id"], r["initial_state_id"]) for r in rows}
         if len(rows) != len(keys) or keys != expected or complete["episodes"] != len(rows):
             raise ValueError(f"Duplicate, missing, or unexpected episodes: {shard}")

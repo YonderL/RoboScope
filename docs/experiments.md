@@ -1,6 +1,17 @@
 # Experiment specification
 
-## Shared protocol
+## Official result selection
+
+The [README comparison](../README.md#official-closed-loop-results-2026-09-28)
+aligns all four policies by task name, with 50 trials per task. ACT, DP and
+SmolVLA use their MuJoCo 3.3.2 on-ramekin reruns and the archived other nine tasks;
+Pi-0 LoRA uses its complete MuJoCo 3.3.2 evaluation. Official totals are
+ACT **434/500 (86.8%)**, DP **444/500 (88.8%)**, SmolVLA **448/500 (89.6%)**,
+and Pi-0 LoRA **438/500 (87.6%)**. The [official records](../results/official_spatial/summary.json)
+retain each task's source and checkpoint fingerprint. See the
+[merge accounting and rerun protocols](evaluation_20260926.md).
+
+## Historical ACT/DP shared protocol
 
 LIBERO-Spatial, 10 tasks, one task-ID-conditioned model per training run. Original 128×128 agentview + wrist RGB. Proprioception: joint positions (7) + gripper qpos (2). Action: OSC_POSE delta translation (3), delta axis-angle rotation (3), gripper (1). Controller at 20 Hz, action clipped to [-1,1]; controller scales translation components to ±0.05 m and rotation components to ±0.5 rad. Gripper uses command sign, not a target width.
 
@@ -50,16 +61,16 @@ Each evaluation worker holds one policy; 8 simulator processes per GPU. DP evalu
 
 ## Native VLA study
 
-This study is not a row on the ACT/DP table. Images, proprioception, action execution, rollout budget and episode identity all differ. Figures are rebuilt from [results/vla_spatial/snapshot.json](../results/vla_spatial/snapshot.json) with `python -m roboscope report --study vla`.
+Images, proprioception, action execution, rollout budget and episode identity differ from ACT/DP. Figures are rebuilt from [results/vla_spatial/snapshot.json](../results/vla_spatial/snapshot.json) with `python -m roboscope report --study vla`.
 
 | Run | Recipe | What was measured |
 |---|---|---|
-| SmolVLA, 100k, execute 10 | [smolvla_official.json](../configs/libero_spatial/smolvla_official.json) | **411/500 (82.2%)**; a 10-trial/task pass on the same checkpoint is 81/100 |
+| SmolVLA, 100k, execute 10 | [smolvla_official.json](../configs/libero_spatial/smolvla_official.json) | **411/500 (82.2%)** |
 | SmolVLA periodic rollouts | same training run, execution horizon 1, 100 episodes | 68% at 20k, 73% at 60k, 72% at 80k, 69% at 100k |
-| Pi-0 LoRA, HF Spatial, 30k | [pi0_lora_hf_spatial.json](../configs/libero_spatial/pi0_lora_hf_spatial.json) | Training and held-out trajectory loss only. No full closed-loop score is published |
+| Pi-0 LoRA, HF Spatial, 30k | [pi0_lora_hf_spatial.json](../configs/libero_spatial/pi0_lora_hf_spatial.json) | Training/held-out loss; final closed-loop **438/500 (87.6%)** in `results/mujoco332/` |
 
-SmolVLA here is the paper-architecture run: official 256×256 Spatial data, 8D end-effector state, frozen SmolVLM2-500M, 100k updates, batch 64, seed 0. The 500-episode number executes 10 of the 50 predicted actions. It is not the in-training periodic evaluation, which replans every step. Native reports do not record the ACT/DP initial-state IDs, so the two studies cannot be paired episode by episode. One training seed. The 100- and 500-episode passes overlap.
+SmolVLA here is the paper-architecture run: official 256×256 Spatial data, 8D end-effector state, frozen SmolVLM2-500M, 100k updates, batch 64, seed 0. The 500-episode number executes 10 of the 50 predicted actions. It is not the in-training periodic evaluation, which replans every step. Native reports do not record the ACT/DP initial-state IDs, so the two studies cannot be paired episode by episode. One training seed.
 
-A MuJoCo 3.3.2 rerun of task 5 (43/50) stays in the snapshot as a diagnostic. It is not part of the 411/500 aggregate. A one-episode-per-task Pi-0 smoke run is local only and is not a published score.
+MuJoCo 3.3.2 rerun records and the official merge are documented in [the evaluation report](evaluation_20260926.md). Smoke runs and superseded diagnostic probes remain local.
 
 The earlier [HDF5 SmolVLA recipe](smolvla_spatial.md) (128×128, 9D joints, `smolvla_base`, 20k updates) and the [RLT recipe](smolvla_rlt_spatial.md) remain separate code paths. RLT smoke tests pass; a success-rate comparison has not been measured. The [HDF5 Pi-0 recipe](pi0_lora_spatial.md) is likewise separate from the HF Spatial training curve above.

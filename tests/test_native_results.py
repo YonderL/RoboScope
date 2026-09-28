@@ -38,10 +38,10 @@ def test_native_outcome_is_not_truthiness_coerced():
 def test_published_vla_snapshot_and_duplicate_rejection():
     path = Path(__file__).resolve().parents[1] / "results/vla_spatial/snapshot.json"
     value = audit_snapshot(json.loads(path.read_text()))
-    full = value["evaluations"][1]
+    full = value["evaluations"][0]
     assert len(full["episodes"]) == 500
     assert sum(r["success"] for r in full["episodes"]) == 411
     damaged = copy.deepcopy(value)
-    damaged["evaluations"][1]["episodes"][0] = damaged["evaluations"][1]["episodes"][1]
+    damaged["evaluations"][0]["episodes"][0] = damaged["evaluations"][0]["episodes"][1]
     with pytest.raises(ValueError, match="duplicate"):
         audit_snapshot(damaged)

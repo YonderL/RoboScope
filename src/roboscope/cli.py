@@ -55,7 +55,9 @@ def main():
     posttraining.add_argument("--start", action="store_true")
     posttraining.add_argument("--resume", action="store_true")
     report = sub.add_parser("report", help="Render figures from portable audited records; no GPU")
-    report.add_argument("--study", choices=["baseline", "vla", "all"], default="baseline")
+    report.add_argument(
+        "--study", choices=["baseline", "vla", "mujoco332", "official", "all"], default="baseline"
+    )
     report.add_argument("--data", type=Path, help="Override one study's portable records directory")
     report.add_argument("--output", type=Path, default=Path("docs/assets"))
     args = parser.parse_args()
@@ -70,6 +72,14 @@ def main():
             from roboscope.reporting.vla import render
 
             render(args.data or Path("results/vla_spatial"), args.output)
+        if args.study in ("mujoco332", "all"):
+            from roboscope.reporting.evaluation import render
+
+            render(args.data or Path("results/mujoco332"), args.output)
+        if args.study in ("official", "all"):
+            from roboscope.reporting.official import render
+
+            render(args.data or Path("results"), args.output)
     elif args.command == "posttrain":
         from roboscope.workflows.config import validate_rlt
 

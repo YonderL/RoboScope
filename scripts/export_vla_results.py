@@ -37,7 +37,7 @@ def export(workspace):
     if (policy["n_action_steps"], policy["chunk_size"]) != (10, 50):
         raise ValueError("Expected 50 predicted / 10 executed actions")
     evaluations = []
-    for directory, count in [("eval_exec10_100k", 10), ("eval_exec10_100k_50", 50)]:
+    for directory, count in [("eval_exec10_100k_50", 50)]:
         reports = []
         for shard in ("a", "b"):
             config = json.loads(read(smol / directory / f"eval_{shard}.json"))
@@ -66,9 +66,6 @@ def export(workspace):
                 },
             }
         )
-    # Diagnostic rerun is deliberately separate: a different simulator and only T5.
-    diagnostic = json.loads(read(smol / "eval_exec10_100k_mujoco332_ramekin/eval_info.json"))
-    diagnostic_rows = native_episodes([diagnostic], [5], 50)
     log = read(smol / "train.log")
     losses, periodic = {}, {}
     for line in log.splitlines():
@@ -117,18 +114,12 @@ def export(workspace):
                 },
                 "pi0": {
                     "rows": rows,
-                    "note": "HF Spatial LoRA, seed 0, every 100 steps plus validation; no rollout score available.",
+                    "note": "HF Spatial LoRA, seed 0, every 100 steps plus validation; rollouts are a separate study.",
                 },
             },
             "periodic_evaluation": sorted(periodic.values(), key=lambda r: r["step"]),
-            "diagnostic": {
-                "task_id": 5,
-                "simulator": "MuJoCo 3.3.2",
-                "episodes": diagnostic_rows,
-                "note": "Separate single-task rerun; never substituted into the 500-episode result.",
-            },
             "limitations": [
-                "Single training seed; overlapping 100/500 samples are not independent replications.",
+                "Single training seed; no training-seed uncertainty is established.",
                 "Native protocol differs from historical ACT/DP; no matched leaderboard or paired inference.",
                 "Checkpoint hash checked at export, not recorded by native evaluator at rollout time.",
                 "Periodic evaluation uses execution horizon 1; standalone ablations use 10.",

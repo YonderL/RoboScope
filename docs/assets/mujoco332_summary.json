@@ -1,0 +1,22 @@
+{
+  "act": {
+    "episodes": 50,
+    "successes": 34,
+    "success_rate_percent": 68.0
+  },
+  "dp": {
+    "episodes": 50,
+    "successes": 37,
+    "success_rate_percent": 74.0
+  },
+  "smolvla": {
+    "episodes": 50,
+    "successes": 47,
+    "success_rate_percent": 94.0
+  },
+  "pi0": {
+    "episodes": 500,
+    "successes": 438,
+    "success_rate_percent": 87.6
+  }
+}

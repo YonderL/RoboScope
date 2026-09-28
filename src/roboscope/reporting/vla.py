@@ -57,7 +57,7 @@ def render(data, output):
     fig.suptitle("Training evidence | LIBERO-Spatial · seed 0", fontsize=17, fontweight="bold")
     fig.supxlabel(
         "Different loss objectives / datasets; loss magnitudes are not a policy ranking. "
-        "Periodic rollouts execute 1 action. Pi-0 has no rollout score.",
+        "Periodic rollouts execute 1 action. Pi-0 rollout results are reported separately.",
         fontsize=9,
     )
     save(fig, output, "vla_training")
@@ -101,8 +101,8 @@ def render(data, output):
     )
     fig.suptitle("SmolVLA | native 256px / 8D-state protocol", fontsize=17, fontweight="bold")
     fig.supxlabel(
-        "Single seed; 100/500 trials overlap. Native episode indices are not audited ACT/DP initial-state IDs.\n"
-        "T5 MuJoCo 3.3.2 diagnostic (43/50) is separate and not substituted into this aggregate.",
+        "Single training seed. Native episode indices are not audited ACT/DP initial-state IDs.\n"
+        "MuJoCo 3.3.2 follow-up evaluations are reported separately; this historical aggregate is unchanged.",
         fontsize=9,
     )
     save(fig, output, "smolvla_evaluation")

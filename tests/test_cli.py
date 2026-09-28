@@ -42,6 +42,32 @@ def test_evaluation_preview_does_not_load_weights(tmp_path):
     assert not output.exists()
 
 
+def test_native_smolvla_preview_needs_no_training_stack(tmp_path):
+    output = tmp_path / "native-evaluation"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "roboscope.workflows.smolvla_evaluation",
+            "--source",
+            "/missing/source",
+            "--libero-root",
+            "/missing/assets",
+            "--output",
+            str(output),
+            "--task-ids",
+            "5",
+            "--gpu-model",
+            "pro5000",
+        ],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    assert "Preview only" in result.stdout
+    assert not output.exists()
+
+
 def test_worker_entrypoints_import_when_training_stack_installed():
     import importlib.util
 
