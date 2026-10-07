@@ -1,6 +1,6 @@
 # Preparing a GitHub release
 
-The source archive is built with an explicit allowlist. It contains the package, recipes, tests, documentation, figures and lightweight result records. Local `outputs/`, old `experiments/`, simulator assets, weights and data are excluded. The builder rejects symlinks, model/data artifacts and personal absolute paths in textual source material.
+The source archive is built with an explicit allowlist. It contains the package, recipes, tests, documentation, figures and lightweight result records. Local `outputs/`, old `experiments/`, simulator assets, weights and data are excluded. The builder rejects symlinks, model/data artifacts and personal absolute paths in textual source material, including shell scripts. Local hardware probes and continuation notes are explicitly excluded. Git stores PNG previews; PDF/SVG versions are regenerated with the reporting command. Only completed key evaluations are exported; logs, smoke runs, videos and trajectories stay local.
 
 ```bash
 python scripts/build_release.py

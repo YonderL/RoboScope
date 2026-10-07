@@ -3,9 +3,9 @@
 set -euo pipefail
 PROJECT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 PYTHON="${PYTHON:-python}"
-SFT_SOURCE="${SFT_SOURCE:-${PROJECT_ROOT}/outputs/smolvla_spatial_seed0}"
-OUTPUT_ROOT="${OUTPUT_ROOT:-${PROJECT_ROOT}/outputs/smolvla_rlt_spatial_seed0}"
-RECIPE="${RECIPE:-${PROJECT_ROOT}/configs/libero_spatial/smolvla_rlt.json}"
+SFT_SOURCE="${SFT_SOURCE:-${PROJECT_ROOT}/outputs/smolvla_official_spatial_seed0}"
+OUTPUT_ROOT="${OUTPUT_ROOT:-${PROJECT_ROOT}/outputs/smolvla_rlt_hf_spatial_seed0}"
+RECIPE="${RECIPE:-${PROJECT_ROOT}/configs/libero_spatial/smolvla_rlt_hf.json}"
 checkpoint=final
 stage=all
 start_args=()
@@ -49,7 +49,8 @@ if int(smoke):
     cfg.update(token_steps=2, token_batch_size=2, feature_batch_size=1, token_save_every=1,
                online_steps=120, warmup_steps=20, initial_updates=2, updates_per_transition=1,
                batch_size=4, replay_capacity=100, rollout_horizon=20, workers=0,
-               log_every=1, eval_episodes=1, eval_envs=1, video_episodes_per_task=0)
+               log_every=1, eval_episodes=1, eval_envs=1, video_episodes_per_task=0,
+               latency_warmup=0, latency_repeats=2)
 Path(target).write_text(json.dumps(cfg, indent=2) + '\n')
 PY
 episodes=50

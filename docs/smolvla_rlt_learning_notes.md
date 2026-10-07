@@ -1,5 +1,7 @@
 # SmolVLA RLT：读代码与训练排查
 
+以下默认值已对齐到 [HF Spatial 协议](smolvla_rlt_hf.md)：256px RGB、8D EEF 状态、280 步回合。
+
 本文针对仓库当前实现，区分代码确定的行为和需要实验验证的风险。
 所有调参建议都是待验证方案；本次只补充注释与分析，没有改动算法、默认参数或评测协议。
 训练入口和论文适配说明见 [RLT 运行说明](smolvla_rlt_spatial.md)。
@@ -16,9 +18,9 @@
 
 | 张量 | 形状 | 含义 |
 |---|---|---|
-| VLM image features | `[B, N_image, D_vlm]` | 冻结 SmolVLA 最终层的图像位置特征 |
-| RL token | `[B, 256]` | 学习得到的单个压缩向量 |
-| state / next_state | `[B, 266]` | token + 9D 本体状态 + 剩余时间比例 |
+| VLM image features | `[B, N_image, 960]` | 冻结 SmolVLA 最终层的图像位置特征（SmolVLM2-500M） |
+| RL token | `[B, 960]` | 与 VLM hidden 同宽的单个压缩向量；无 960→更窄投影 |
+| state / next_state | `[B, 969]` | token + 8D EEF 状态 + 剩余时间比例 |
 | reference / action | `[B, 10, 7]` | SFT 参考动作 / 真实执行的动作 |
 | action_mask | `[B, 10]` | 短尾窗口哪些动作实际执行过 |
 | reward / discount | `[B]` | 窗口折扣奖励 / bootstrap 系数 |
@@ -43,21 +45,24 @@ actor 通过 `action -> Q` 的导数学习动作；冻结 critic 参数不等于
 论文图 2 输入重建网络的是 image embeddings，脚注 1 明确实验省略语言 embeddings，
 公式 (3) 则将本体状态与 RL token 拼接。当前实现遵循这一设置；原先保留完整 prefix 的版本已更正。
 语言依然输入冻结 VLA，并可能通过注意力影响图像位置的输出，但不作为独立 token 被重建。
-本体状态在下游单独拼接为归一化的 9D 向量，不使用 VLM 的 state token 作为 RL token 输入。
+本体状态在下游单独拼接为归一化的 8D EEF 向量，不使用 VLM 的 state token 作为 RL token 输入。
 
 新增的 RLToken encoder 与 reconstruction decoder **各 2 层**，参数互不共享，
-均为宽 256、8 个 attention heads、FFN 宽 1024，使用 pre-LayerNorm、GELU、零 dropout，末尾再加 LayerNorm。
+均为宽 960（等于 SmolVLM `hidden_size`）、8 个 attention heads、FFN 宽 3840，
+使用 pre-LayerNorm、GELU、零 dropout，末尾再加 LayerNorm。
 `token_layers=2` 同时指定两者各自的深度，不是两个网络合计 2 层。
-decoder 用 `TransformerEncoder` 加 causal mask 实现，只有因果自注意力，没有 cross-attention。
-在线推理只需要 encoder 输出的 RL token；decoder 仅用于第一阶段重建训练。
+宽与特征维相同时，encoder/decoder 入口不做线性降维，直接使用 stop-gradient 的 VLM embedding；
+仅保留论文公式 (2) 的输出投影 `h_φ`。`build_policy` 拒绝 `token_dim != VLM hidden_size`。
+decoder 用 `TransformerEncoder` 加上三角 Bool mask（True=禁止 attend）实现因果自注意力，
+没有 cross-attention。在线推理只需要 encoder 输出的 RL token；decoder 仅用于第一阶段重建训练。
 
 ```text
 图像 / 语言 / 状态 prefix
-  -> 冻结 VLM 的 16 个保留 blocks -> 最终 RMSNorm -> [B, M, D_vlm]
-  -> 仅选图像位置 [B, N_image, D_vlm]，排除语言/state/padding 位置
-  -> 线性映射到 256 维、追加可学习 readout
-  -> 2 层 encoder -> 取 readout 位置 -> RL token [B, 256]
-  -> RL token + 右移后的图像特征 -> 2 层因果 decoder -> 重建 VLM 图像特征
+  -> 冻结 VLM 的 16 个保留 blocks -> 最终 RMSNorm -> [B, M, 960]
+  -> 仅选图像位置 [B, N_image, 960]，排除语言/state/padding 位置
+  -> 直接进入宽 960 的 encoder、追加可学习 readout（无降维投影）
+  -> 2 层 encoder -> 取 readout 位置 -> RL token [B, 960]
+  -> RL token + 右移后的图像特征 -> 2 层因果 decoder + 输出投影 -> 重建 VLM 图像特征
 
 在线 RL：RL token + 归一化本体状态 + 剩余时间 -> actor/critic
 ```
@@ -70,10 +75,10 @@ decoder 用 `TransformerEncoder` 加 causal mask 实现，只有因果自注意�
 
 先看 `rollouts.json` 的 `success`、`warmup` 和 `replay_rewarded_transitions`，按 `task_id` 分组。
 后者是正奖励**窗口数**，不是成功回合数：C=10、stride=2 时一次成功通常贡献最多 5 个正奖励窗口。
-一个 600 步的成功回合有 300 条窗口，直接含正奖励的比例最多约 1.7%，其余依赖 bootstrap。
+一个 280 步的成功回合有 140 条窗口，直接含正奖励的比例最多约 3.6%，其余依赖 bootstrap。
 
-默认 warmup=6000 控制步：如果全是 600 步失败回合，就只有 10 个回合，即每任务一次。
-默认总预算 100000 步在同样条件下约为 167 个回合，每任务仅约 16–17 个。
+默认 warmup=6000 控制步：如果全是 280 步失败回合，需要 22 个完整回合，即每任务约两次。
+默认总预算 100000 步在同样条件下约为 358 个回合，每任务仅约 35–36 个。
 这些是根据配置计算的覆盖量，不能把“十万步”理解为十万次独立尝试。
 
 排查顺序：先验证 SFT C=10 基线，再查看随机训练 reset 下各任务能否成功，最后决定是否增加
@@ -102,15 +107,15 @@ critic 学习的是自己 bootstrap 出来的标签，actor 又会追逐 critic 
 网络输出并没有硬裁剪到 [0,1]，初期轻微负值并不直接证明实现错误。
 
 stride=2 的相邻窗口共享 8/10 动作，UTD=5 又对每个新增窗口做 5 次更新。
-600 步回合会触发 1500 次更新（第一次还有额外预更新），但并没有 1500 份独立的新经验。
+280 步回合会触发 700 次更新（第一次还有额外预更新），但并没有 700 份独立的新经验。
 若出现这种退化，优先在独立开发初态上对比降低 UTD、降低学习率和增加采集多样性，逐项修改。
 
 ## 4. gamma 和 beta 可能让优化目标偏离你的预期
 
 `gamma=0.99` 按**控制步**折扣，不是每 10 步才折扣一次。
 完整窗口的 bootstrap 系数是 `0.99**10 ≈ 0.904`。
-一条从开始到成功共 600 步的轨迹，初始回报约为 `0.99**599 ≈ 0.00243`；
-300 步成功约为 `0.99**299 ≈ 0.0495`。因此当前目标明显偏好更早成功，而正式指标只看 600 步内是否成功。
+一条从开始到成功共 280 步的轨迹，初始回报约为 `0.99**279 ≈ 0.0606`；
+140 步成功约为 `0.99**139 ≈ 0.2473`。因此当前目标明显偏好更早成功，而正式指标只看 280 步内是否成功。
 长链任务的早期价值信号可能很弱。
 
 actor 正则是 **70 个坐标的平方和**，再乘 beta=0.1，不是每坐标平均误差。
@@ -146,7 +151,7 @@ replay 缓存的是旧 token 向量，解冻后需要额外处理历史表示失
 
 ## 7. 短尾窗口和时间终止是建模假设
 
-当前成功或达到 600 步都不 bootstrap，并在状态里加入剩余时间，符合这里的有限时域任务定义。
+当前成功或达到 280 步都不 bootstrap，并在状态里加入剩余时间，符合这里的有限时域任务定义。
 不要照搬“truncated 一定要 bootstrap”或“一定不能 bootstrap”的规则到所有环境。
 
 成功的短尾窗口补零并使用 mask；learner 的 actor loss 也沿用该 replay 样本的 mask。
@@ -157,13 +162,13 @@ replay 缓存的是旧 token 向量，解冻后需要额外处理历史表示失
 ## 8. 采集慢、GPU 利用率起伏，不一定是 CUDA 出错
 
 actor/critic 很小，但每个新 reference 仍需运行 SmolVLA 的完整 50 步 proposal。
-600 步回合中，实际控制约查询 60 次；stride-2 replay 需要约 300 个状态的 reference，
-约 240 个状态在回合结束后批量补算。这里是状态数，不是 batch 调用数。
+280 步回合中，实际控制约查询 28 次；stride-2 replay 需要约 140 个状态的 reference，
+约 112 个状态在回合结束后批量补算。这里是状态数，不是 batch 调用数。
 相比只在 10 步边界做推理，特征/参考采集开销明显增加。
 
 目前使用单环境同步采集与学习，`workers` 只控制 token 阶段的数据加载，
 `eval_envs=8` 只控制评测；修改它们不会让在线采集变为 8 个环境。
-一回合 RGB 暂存约 59 MB（600×2×128×128×3 字节，不含 Python 开销），
+一回合 RGB 暂存约 110 MB（280×2×256×256×3 字节，不含 Python 开销），
 replay 主要浮点数组容量约 148 MB，另有 mask、元数据和 checkpoint 序列化的临时副本。
 每回合保存完整 replay 还会消耗磁盘带宽。
 

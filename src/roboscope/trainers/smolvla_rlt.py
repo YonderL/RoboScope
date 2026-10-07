@@ -13,7 +13,7 @@ from roboscope.policies.smolvla_rlt import build_policy, load_sft, vlm_features
 from roboscope.rl.collector import collect_episode
 from roboscope.rl.learner import RLTAgent
 from roboscope.rl.replay import ReplayBuffer
-from roboscope.runtime.common import atomic_save, require_4090, save_json, seed_all
+from roboscope.runtime.common import atomic_save, require_gpu, save_json, seed_all
 from roboscope.runtime.training import capture_rng, cpu_tree, manifest_digest, move_batch, restore_rng
 
 
@@ -30,7 +30,9 @@ def train_token(run, cfg, manifest, policy, device, resume=False):
             raise ValueError("RL token identity changed")
         policy.token.load_state_dict(saved["token"], strict=True)
         return
-    optimizer = torch.optim.AdamW(policy.token.parameters(), lr=cfg["token_lr"])
+    # Preserve the requested larger Adam denominator floor. This alone does not
+    # establish the cause of earlier nonfinite gradients; invalid updates must fail visibly.
+    optimizer = torch.optim.AdamW(policy.token.parameters(), lr=cfg["token_lr"], eps=1e-6)
     step = 0
     if resume and last.exists():
         saved = torch.load(last, map_location="cpu", weights_only=False)
@@ -45,7 +47,12 @@ def train_token(run, cfg, manifest, policy, device, resume=False):
                 final, {key: value for key, value in saved.items() if key not in ("optimizer", "rng")}
             )
             return
-    dataset = FrameDataset(manifest, 1, "train", run / "image_cache")
+    if cfg.get("sft_backend") == "hf_native":
+        from roboscope.data.smolvla_hf import HFSpatialFrames
+
+        dataset = HFSpatialFrames(manifest)
+    else:
+        dataset = FrameDataset(manifest, 1, "train", run / "image_cache")
     kwargs = dict(num_workers=cfg["workers"], pin_memory=device.type == "cuda")
     if cfg["workers"]:
         kwargs["multiprocessing_context"] = "spawn"
@@ -71,13 +78,29 @@ def train_token(run, cfg, manifest, policy, device, resume=False):
             ):
                 features, valid = vlm_features(policy.base, part)
             loss = policy.token(features, valid) * (len(part["state"]) / len(batch["state"]))
+            if not torch.isfinite(loss):
+                raise FloatingPointError(
+                    f"Nonfinite token loss before update {step + 1}; no update committed"
+                )
             loss.backward()
             loss_sum += loss.item()
-        torch.nn.utils.clip_grad_norm_(policy.token.parameters(), cfg["grad_clip"], error_if_nonfinite=True)
+        grad_norm = torch.nn.utils.clip_grad_norm_(
+            policy.token.parameters(), cfg["grad_clip"], error_if_nonfinite=True
+        )
         optimizer.step()
         step += 1
         if step % cfg["log_every"] == 0 or step == cfg["token_steps"]:
-            print(json.dumps({"stage": "token", "step": step, "reconstruction_loss": loss_sum}), flush=True)
+            print(
+                json.dumps(
+                    {
+                        "stage": "token",
+                        "step": step,
+                        "reconstruction_loss": loss_sum,
+                        "grad_norm": grad_norm.item(),
+                    }
+                ),
+                flush=True,
+            )
         if step % cfg["token_save_every"] == 0 or step == cfg["token_steps"]:
             payload = {
                 "token": cpu_tree(policy.token.state_dict()),
@@ -158,6 +181,14 @@ def train_online(
         return metrics
 
     def save_progress(metrics):
+        if "sparse_reward" in replay.arrays:
+            # Positive shaped reward is NOT synonymous with benchmark success.
+            records[-1].update(
+                replay_success_reward_transitions=int(
+                    (replay.arrays["sparse_reward"][: len(replay)] > 0).sum()
+                ),
+                replay_shaping_reward_mean=float(replay.arrays["shaping_reward"][: len(replay)].mean()),
+            )
         records[-1].update(
             # metrics 仅是该回合最后一次 learner 更新，不是所有更新的平均值。
             env_steps=env_steps,
@@ -224,7 +255,7 @@ def main():
         raise FileNotFoundError("Train and freeze the RL token first with --stage token")
     if args.stage == "online" and not (args.run / "last.pt").exists():
         raise FileNotFoundError("Collect the warmup replay first with --stage warmup")
-    require_4090()
+    require_gpu(cfg.get("gpu_model", "4090"))
     device = torch.device("cuda")
     torch.set_num_threads(cfg["cpu_threads"])
     torch.use_deterministic_algorithms(True)

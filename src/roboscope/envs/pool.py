@@ -118,13 +118,15 @@ def env_worker(connection, cfg, directory, slot):
 class EnvPool:
     def __init__(self, cfg, directory, size):
         context = mp.get_context("spawn")  # CUDA/EGL 已初始化时不能 fork。
+        worker = env_worker
+        if cfg.get("environment_backend") == "hf_libero":
+            from roboscope.envs.hf_libero import env_worker as worker
+
         self.connections, self.processes = [], []
         try:
             for slot in range(size):
                 parent, child = context.Pipe()
-                proc = context.Process(
-                    target=env_worker, args=(child, cfg, str(directory), slot), daemon=True
-                )
+                proc = context.Process(target=worker, args=(child, cfg, str(directory), slot), daemon=True)
                 proc.start()
                 child.close()
                 self.connections.append(parent)

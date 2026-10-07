@@ -4,6 +4,7 @@ import numpy as np
 import torch
 
 from roboscope.rl.replay import episode_transitions
+from roboscope.rl.rewards import progress_enabled
 from roboscope.runtime.common import CAMERAS
 
 
@@ -82,7 +83,32 @@ def collect_episode(pool, policy, task, episode_id, cfg, device, warmup):
     # 此过程包含完整 flow sampling，是 stride-2 replay 的主要额外计算开销。
     for start in range(0, len(missing), cfg["feature_batch_size"]):
         describe(missing[start : start + cfg["feature_batch_size"]])
-    rows = list(episode_transitions(actions, success, features, cfg, task["id"], episode_id, seed, warmup))
+    potentials, reward_metrics = None, {}
+    if progress_enabled(cfg):
+        # Fail closed if any physical step missed the privileged reward channel.
+        progress = [obs["reward_progress"] for obs in observations]
+        potentials = [row["potential"] for row in progress]
+        pickup = np.asarray([row["pickup"] > 0 for row in progress])
+        phi = np.asarray(potentials, dtype=np.float64)
+        phi[-1] = 0.0
+        per_step_shaping = cfg["reward"]["scale"] * (cfg["gamma"] * phi[1:] - phi[:-1])
+        reward_metrics = {
+            "reward_mode": cfg["reward"]["mode"],
+            "potential_max": max(potentials),
+            "pickup_proxy_steps": int(pickup[1:].sum()),
+            "pickup_proxy_entries": int((~pickup[:-1] & pickup[1:]).sum()),
+            "pickup_proxy_exits": int((pickup[:-1] & ~pickup[1:]).sum()),
+            "sparse_return": float(success),
+            "shaping_return": float(per_step_shaping.sum()),
+            "discounted_shaping_return": float(
+                np.dot(cfg["gamma"] ** np.arange(len(actions)), per_step_shaping)
+            ),
+        }
+    rows = list(
+        episode_transitions(
+            actions, success, features, cfg, task["id"], episode_id, seed, warmup, potentials=potentials
+        )
+    )
     return rows, {
         "episode_id": episode_id,
         "task_id": task["id"],
@@ -92,4 +118,5 @@ def collect_episode(pool, policy, task, episode_id, cfg, device, warmup):
         "warmup": warmup,
         "replay_transitions": len(rows),
         "reset": "randomized_training_reset_no_fixed_eval_initial_state",
+        **reward_metrics,
     }

@@ -44,6 +44,8 @@ ACT 是 K=8、epoch 32 的 chunk 执行。DP 是 30k final，DDIM=10、Ta=8。Sm
 
 另有两条尚未报告独立正式评测成功率的路径：走共享评测器的 HDF5 SmolVLA（[smolvla_spatial.md](docs/smolvla_spatial.md)），以及 RLT 后训练。RLT 冻结 SFT，用 RL token、Gaussian actor 和双 critic 在 LIBERO-Spatial rollout 上更新；每次执行 10 步，并保留 SFT 的 10 步对照。可用 `bash scripts/posttrain_smolvla_rlt_spatial.sh --preview` 预览，详见 [RLT 运行说明](docs/smolvla_rlt_spatial.md)。RLT 已进入在线训练；2026-09-28 的记录为 352 个在线回合、273 次成功（77.6%）、55,630 个累计环境步。这是训练过程的 rollout SR，独立正式评测和相对 SFT 的增益仍待测量。
 
+后续新实验统一使用 HF LIBERO。RLT 默认接入官方 SmolVLA 100k 权重，使用 checkpoint 保存的归一化参数、256px RGB 和 8D EEF 状态；环境固定为 hf-libero 0.1.4 / MuJoCo 3.3.2。见 [HF 权重与环境对齐](docs/smolvla_rlt_hf.md)。
+
 支持 [分阶段执行](docs/smolvla_rlt_spatial.md#按阶段执行)：SFT → `--stage token` → `--stage warmup` → `--stage online` → `--stage evaluate`。先冻结 RL token 再保存特征 replay；在线阶段持续采集新轨迹并更新策略。
 
 ## 历史 ACT/DP 分析（复测合并前）

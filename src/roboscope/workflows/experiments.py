@@ -160,9 +160,14 @@ def evaluation_config(source, checkpoint, episodes, ddim_steps, ta, rlt_referenc
                 raise ValueError(
                     "RLT does not select checkpoints on evaluation successes; use --checkpoint final"
                 )
-            ta = cfg["action_horizon"] if ta is None else ta
-            if ta != cfg["action_horizon"] or ddim_steps != 10:
+            trained_horizon = cfg["action_horizon"]
+            ta = trained_horizon if ta is None else ta
+            if ddim_steps != 10 or (not rlt_reference and ta != trained_horizon):
                 raise ValueError("RLT must use its trained action horizon; DDIM overrides do not apply")
+            # The reference bypasses the RL actor and samples the native SFT
+            # chunk. Shorter execution only changes the evaluator's queue.
+            if rlt_reference and not 1 <= ta <= trained_horizon:
+                raise ValueError("SFT reference execution horizon must be between 1 and the trained horizon")
             cfg["evaluation_policy"] = "sft_reference" if rlt_reference else "rlt"
             label = "reference" if rlt_reference else "rlt"
             variant = f"smolvla_{label}_c{ta:03d}"
@@ -191,6 +196,9 @@ def evaluation_config(source, checkpoint, episodes, ddim_steps, ta, rlt_referenc
     )
     for task in manifest["tasks"]:
         task["eval_initial_state_ids"] = list(range(episodes))
+    if cfg.get("environment_backend") == "hf_libero":
+        # Versioned in the new evaluation contract; old results remain intact.
+        cfg["hf_eval_reset_protocol"] = "property_sampler_clear_v1"
     return cfg, manifest, variant
 
 
@@ -255,11 +263,21 @@ def evaluate(
             ("image_cache", Path(source).resolve() / "image_cache"),
             (f"{checkpoint}.pt", weight),
         ]:
+            if name == "image_cache" and cfg.get("sft_backend") == "hf_native":
+                continue
             if name == "image_cache" and variant.startswith("act"):
                 target = Path(source).resolve().parent / name
             if not (run / name).exists():
                 (run / name).symlink_to(target)
-        cards, envs = cards_and_envs(gpu_model or "4090")
+        cards, envs = cards_and_envs(gpu_model or cfg.get("gpu_model", "4090"))
+        if cfg.get("sft_backend") == "hf_native":
+            for environment in envs:
+                environment.update(
+                    PYTHONPATH=str(run / "source"),
+                    HF_HUB_OFFLINE="1",
+                    HF_DATASETS_CACHE=str(run / "hf_cache"),
+                    TOKENIZERS_PARALLELISM="false",
+                )
         save_json(run / "gpu_mapping.json", cards)
         commands = [
             [

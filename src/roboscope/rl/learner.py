@@ -17,7 +17,7 @@ class RLTAgent(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
-        state_dim = cfg["token_dim"] + 9 + 1  # token, normalized proprio, remaining time
+        state_dim = cfg["token_dim"] + cfg.get("state_dim", 9) + 1
         self.actor = Actor(state_dim, cfg["action_horizon"], cfg["hidden_dims"], cfg["actor_std"])
         self.critic = TwinQ(state_dim, cfg["action_horizon"], cfg["hidden_dims"])
         self.target_critic = copy.deepcopy(self.critic).requires_grad_(False)

@@ -6,11 +6,11 @@ From the repository root:
 
 ```bash
 python -m pip install -e '.[report,test]'
-python -m roboscope report
+python -m roboscope report --study all
 python -m pytest tests/test_results.py tests/test_cli.py
 ```
 
-No training stack is imported by the reporting CLI. `results/libero_spatial/` is sufficient to regenerate all published charts. Base package installation deliberately does not upgrade PyTorch.
+No training stack is imported by the reporting CLI. `results/` contains the portable records for every published chart. Base package installation deliberately does not upgrade PyTorch.
 
 ## 2. Training environment
 

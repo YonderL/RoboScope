@@ -21,6 +21,12 @@ FILES = [
 ]
 DIRS = ["src", "configs", "docs", "examples", "tests", "scripts", "results", ".github"]
 ARTIFACT_SUFFIXES = {".pt", ".pth", ".safetensors", ".hdf5", ".h5", ".npz", ".npy", ".mp4", ".pyc"}
+LOCAL_ONLY = {
+    "docs/career",
+    "docs/pi0_pro5000_continuation.md",
+    "scripts/continue_pi0_pro5000.sh",
+    "scripts/benchmark_pi0_microbatch.py",
+}
 
 
 def main():
@@ -39,6 +45,11 @@ def release_files(root):
     paths = [root / name for name in FILES]
     for directory in DIRS:
         for path in (root / directory).rglob("*"):
+            relative = path.relative_to(root)
+            if relative.as_posix() in LOCAL_ONLY or any(
+                parent.as_posix() in LOCAL_ONLY for parent in relative.parents
+            ):
+                continue
             if any(x in path.parts for x in ("__pycache__", ".pytest_cache", ".ruff_cache")) or any(
                 x.endswith(".egg-info") for x in path.parts
             ):

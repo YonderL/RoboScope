@@ -1,5 +1,9 @@
 # SmolVLA 的 RLT 后训练
 
+后续实验统一使用 **HuggingFaceVLA/libero Spatial 数据 + pip hf-libero 环境**。
+默认入口已切换到官方 100k SFT checkpoint；权重/环境对齐和验证命令见
+[HF 对齐说明](smolvla_rlt_hf.md)。旧 HDF5 配方仅保留用于历史结果复现。
+
 本实现依据 **RL Token: Bootstrapping Online RL with Vision-Language-Action Models**
 （[论文](https://arxiv.org/abs/2604.23073)，对应用户提供的 PDF），将其公式 (1)–(5)
 和 Algorithm 1 适配到项目的 SmolVLA + LIBERO-Spatial。
@@ -46,7 +50,7 @@ SmolVLA 的 prefix KV cache 同时用于最终特征读取与原生 flow samplin
 图 2 仍把 prompts 输入 VLA；脚注 1 的省略语言 embeddings 指 RL token 重建阶段。
 本实现同样保留冻结 SmolVLA 的完整图像/语言/状态前向和 KV cache，只在重建分支选取图像位置。
 图像特征可能已通过 VLM 注意力融合语言信息，这与直接把语言位置送进重建网络不同。
-9D 本体状态在提取 RL token 后单独归一化、拼接，供 actor 和 critic 使用，不参与重建目标。
+8D 末端位姿与夹爪状态在提取 RL token 后单独归一化、拼接，供 actor 和 critic 使用，不参与重建目标。
 
 ## Replay buffer 与 TD 目标
 
@@ -61,7 +65,7 @@ Replay **只接受本轮 LIBERO rollout**：冻结 SFT 的 warmup 轨迹和在�
  task_id, episode_id, control_step, seed, warmup)
 ```
 
-`x` 是 RL token、归一化的 9D joint/gripper 状态、剩余回合时间的拼接。
+`x` 是 RL token、归一化的 8D EEF/gripper 状态、剩余回合时间的拼接。
 由于 VLA 和 token 在 RL 阶段冻结，buffer 保存这些紧凑向量即可；无需反复运行 VLA，也无需长期保存 RGB。
 对跨越推理调用边界的 stride-2 窗口，使用实际连续执行的动作，
 并为中间状态重新生成对齐的 VLA reference，不使用前一次 reference 的错位切片。
@@ -79,7 +83,7 @@ actor_loss = mean(-min(Q1, Q2) + beta * sum((sampled_action - reference)^2))
 
 成功仅由 LIBERO `check_success()` 给出：首次成功的控制步奖励为 1，其余为 0。
 短尾补零并保存有效动作 mask；critic 输入和 actor 的正则只使用实际执行部分。
-达到 600 步视为此基准任务的有限时域终止，记录 `truncated=true` 并停止 bootstrap。
+达到 280 步视为此基准任务的有限时域终止，记录 `truncated=true` 并停止 bootstrap。
 因此状态显式包含剩余时间。若未来改成无限时域任务，这项处理必须相应改变。
 
 Reference dropout 在 actor 更新时以 50% 概率将整条参考动作输入置零；
@@ -89,21 +93,22 @@ actor 是固定标准差的 Gaussian；均值用 tanh 限制，采样动作裁�
 
 ## 默认配置与适配差异
 
-配置：`configs/libero_spatial/smolvla_rlt.json`。
+配置：`configs/libero_spatial/smolvla_rlt_hf.json`。
 
 | 项目 | 本实现 | 来源 |
 |---|---|---|
-| VLA 预测块 / RL 执行块 | 50 / **10** | 论文的 H / C；原 SFT 配置仍执行 50 |
+| VLA 预测块 / RL 执行块 | 50 / **10** | 预测 50 步；RLT 与 SFT 对照都执行 10 步 |
 | RL token 输入 / 重建目标 | 最终 VLM 层的图像位置特征 | 图 2、脚注 1；`token_features=vlm_image_tokens` |
 | Replay stride | 2 | 论文 |
 | Reference dropout | 0.5 | 论文附录 |
 | Twin Q、critic:actor 更新比 | 2 个 Q，2:1 更新 | 论文 |
 | 每新增 replay transition 的 critic 更新数 | 5 | 按论文 UTD=5 做出的显式计数约定 |
 | Actor / critic MLP | 两层 256，LayerNorm + ReLU | 层数/宽度参考论文；归一化是工程选择 |
-| Token 重建更新数 | 2,000 | 论文给出 2,000–10,000 |
-| Token encoder / decoder | 各 2 层，宽 256，8 heads | SmolVLA 适配值；论文图示 readout 宽 2,048 |
+| Token 重建更新数 | 10,000 | 取论文区间 2,000–10,000 的上限 |
+| Token encoder / decoder | 各 2 层，宽 960，8 heads | 与 SmolVLM2-500M `hidden_size` 同宽；论文图示 π0.6 readout 为 2,048 |
+| Token 输入投影 | 无（宽 = 特征维时直接喂 embedding） | 对齐论文「同宽压缩 token 个数」；旧版 960→256 降维已移除 |
 | Token loss | 有效 token/feature 的平均 MSE | 公式 (2) 的缩放实现 |
-| Token batch / lr | 32 / 1e-4 | 工程默认值 |
+| Token batch / lr | 64 / 3e-5 | HF recipe 使用 `feature_batch_size=16`，每步累积 4 次。Adam `eps=1e-6`；该值不能保证避免梯度异常，注意力数值检查见 `smolvla_rlt_hf.md` |
 | Actor / critic lr | 3e-4 / 3e-4 | 工程默认值，论文未提供具体数值 |
 | Actor std / beta | 0.05 / 0.1 | 工程默认值；beta 对应 **L2 平方和** |
 | gamma / target tau | 0.99 / 0.005 | 工程默认值 |
@@ -111,7 +116,7 @@ actor 是固定标准差的 Gaussian；均值用 tanh 限制，采样动作裁�
 | Warmup / online budget | 6,000 / 100,000 控制步 | 工程预算；online budget 包括 warmup |
 | Warmup 后额外预更新 | 1,000 次 critic 更新，含延迟 actor 更新 | 避免直接用未训练 actor 接管的工程选择 |
 | 采集/学习调度 | 单环境，完整 episode 后同步更新 | 为可读性和精确恢复采用同步实现；论文采用异步 |
-| 控制频率 / proprio | 20 Hz / 9D joint+gripper | 沿用项目；论文实机是 50 Hz，并使用额外速度状态 |
+| 控制频率 / proprio | 20 Hz / 8D EEF+gripper | 沿用项目；论文实机是 50 Hz，并使用额外速度状态 |
 
 训练任务按 manifest 的 10 个任务轮转。训练环境调用带独立种子的随机 `reset()`，
 不会加载正式评测的固定初态文件；正式评测始终使用官方固定初态 0–49。
@@ -139,26 +144,25 @@ Replay 并不必须保存 RL token。另一种设计是保存原始 RGB/本体�
 这种设计允许先采集再训练 token，但反复抽样时会重复运行大模型。
 当前采用冻结特征缓存来节省计算，因此有“token 先冻结”的依赖。不要同时用两个进程改写同一 run 的 buffer。
 
-复用已有的 `requirements-training.txt`、`requirements-smolvla.txt` 环境，无额外 RL 框架依赖。
-首先完成 [SmolVLA SFT](smolvla_spatial.md)，确保 SFT 输出中已有 `final.pt` 或 `best.pt`。
-**当前项目目录尚无已完成的 SmolVLA SFT 权重，不能直接从空目录开始 RLT。**
+使用 `pi0-blackwell` 环境（hf-libero 0.1.4、MuJoCo 3.3.2、robosuite 1.4.0、LeRobot 0.6.1）。
+输入为已完成的[官方 SmolVLA SFT](smolvla_official_spatial.md)，读取原生 `model.safetensors` 和保存的 processors。
+入口校验最终训练步数以及权重、归一化参数、数据来源和 benchmark 资源指纹。
 
 ### 按阶段执行
 
-在项目根目录、安装好依赖的环境中运行。`DATA_ROOT` 必须包含 `libero_spatial/`，
-`LIBERO_ROOT` 必须包含 `assets/`、`bddl_files/`、`init_files/`。脚本默认路径是项目内
-`datasets/` 与 `LIBERO/libero/libero/`，外置数据请通过环境变量指定。
+在项目根目录运行。数据集和 benchmark 资源路径从官方 SFT 的 `config.json` 继承；
+HF 数据集必须包含 `spatial_provenance.json` 与 `meta/`。默认使用 PRO 5000；其他 GPU 型号请另存 recipe。
 
 ```bash
-conda activate lerobot
+conda activate pi0-blackwell
 export PYTHON="$(command -v python)"
-export SFT_SOURCE="$PWD/outputs/smolvla_spatial_seed0"
+export SFT_SOURCE="$PWD/outputs/smolvla_official_spatial_seed0"
 
-# 1. SFT；默认训练结束后评测原生 C=50、500 回合
-bash scripts/train_smolvla_spatial.sh --output "$SFT_SOURCE" --start
+# 1. 使用已完成的官方 HF SFT，无需重新训练。
+export RECIPE="$PWD/configs/libero_spatial/smolvla_rlt_hf.json"
 
 # 以下阶段共用同一个 RLT 输出目录和 recipe；应在开始 token 阶段前确定所有超参数。
-export OUTPUT_ROOT="$PWD/outputs/smolvla_rlt_spatial_seed0"
+export OUTPUT_ROOT="$PWD/outputs/smolvla_rlt_hf_spatial_seed0"
 
 # 2. 重建训练；只生成 token.pt/token_last.pt，不创建 LIBERO 环境
 bash scripts/posttrain_smolvla_rlt_spatial.sh --stage token --start
@@ -182,20 +186,21 @@ warmup 以完成整回合为边界，达到 `warmup_steps` 且 replay 至少有�
 
 日志分别为 `train_token.log`、`train_warmup.log`、`train_online.log`，一键运行使用 `train_all.log`。
 `last.pt` 的 `replay` 字段保存 buffer；没有另外导出一份脱离 token 身份的通用 replay 文件。
-默认 token 预算仍为 2000 更新。若采用建议的 5000 更新，请先复制 recipe 并修改 `token_steps`，
+默认 token 预算为 10000 更新（论文区间上限）。若改预算或 `token_dim`，请先复制 recipe，
 用同一个 `RECIPE` 环境变量贯穿所有阶段；不能直接修改旧 run 配置后强行 resume。
+旧的 256 维 token checkpoint 与当前 960 维配置不兼容，需在新目录重新训练 token。
 
 ### 一键运行与恢复
 
 ```bash
 # 默认只预览，不加载权重、不创建训练目录
-bash scripts/posttrain_smolvla_rlt_spatial.sh --source outputs/smolvla_spatial_seed0 --preview
+bash scripts/posttrain_smolvla_rlt_spatial.sh --source outputs/smolvla_official_spatial_seed0 --preview
 
 # token 重建 -> warmup -> 在线 RL -> RLT 和同执行长度 SFT 的正式评测
-bash scripts/posttrain_smolvla_rlt_spatial.sh --source outputs/smolvla_spatial_seed0 --start
+bash scripts/posttrain_smolvla_rlt_spatial.sh --source outputs/smolvla_official_spatial_seed0 --start
 
 # 中断恢复；保留相同配置、源码和 SFT checkpoint
-bash scripts/posttrain_smolvla_rlt_spatial.sh --source outputs/smolvla_spatial_seed0 --start --resume
+bash scripts/posttrain_smolvla_rlt_spatial.sh --source outputs/smolvla_official_spatial_seed0 --start --resume
 ```
 
 脚本支持 `PYTHON`、`SFT_SOURCE`、`OUTPUT_ROOT`、`RECIPE` 环境变量和
@@ -207,23 +212,23 @@ bash scripts/posttrain_smolvla_rlt_spatial.sh --source outputs/smolvla_spatial_s
 
 ```bash
 python -m roboscope posttrain \
-  --source outputs/smolvla_spatial_seed0 \
-  --recipe configs/libero_spatial/smolvla_rlt.json \
-  --output outputs/smolvla_rlt_spatial_seed0 --start
+  --source outputs/smolvla_official_spatial_seed0 \
+  --recipe configs/libero_spatial/smolvla_rlt_hf.json \
+  --output outputs/smolvla_rlt_hf_spatial_seed0 --start
 
 # RLT actor，C=10，500 回合
-python -m roboscope evaluate --source outputs/smolvla_rlt_spatial_seed0 \
-  --output outputs/smolvla_rlt_spatial_seed0/evaluation_rlt --episodes 50 --start
+python -m roboscope evaluate --source outputs/smolvla_rlt_hf_spatial_seed0 \
+  --output outputs/smolvla_rlt_hf_spatial_seed0/evaluation_rlt --episodes 50 --start
 
 # 冻结 SFT 的同长度对照，C=10，另一个独立的 500 回合评测
-python -m roboscope evaluate --source outputs/smolvla_rlt_spatial_seed0 \
-  --output outputs/smolvla_rlt_spatial_seed0/evaluation_sft_c10 \
+python -m roboscope evaluate --source outputs/smolvla_rlt_hf_spatial_seed0 \
+  --output outputs/smolvla_rlt_hf_spatial_seed0/evaluation_sft_c10 \
   --episodes 50 --rlt-reference --start
 ```
 
 建议同时保留原 SFT C=50 的评测。判断 RL 本身的增益，应首先比较 RLT C=10 与 SFT C=10；
 仅比较 RLT C=10 与 SFT C=50，会混入重规划频率变化。
-三个评测都保持项目的 10 任务、每任务 50 固定初态、600 步、5 步静置、
+三个评测都保持项目的 10 任务、每任务 50 固定初态、280 步、10 步静置、
 相同相机/种子/控制器/动作裁剪/成功判定、每 GPU 8 个环境和 5+30 次延迟测量。
 每个评测有独立的输出目录与 checkpoint hash，评测轨迹不回流进训练 replay。
 
@@ -262,4 +267,6 @@ Gaussian/双 Q/延迟 actor 更新、reference dropout、chunk 奖励与实际�
 修正后重新运行的真实 GPU/LIBERO 短测试使用微型 SmolVLA 权重，完成了两个 12 步回合（先 SFT warmup、再 actor），
 生成 12 条 replay transitions，warmup 独立保存时更新次数为 0，恢复在线训练后累计执行 14 次 learner 更新，
 输出均有限；这验证了阶段切换、replay 恢复和采集到更新的实际链路。
-完整 SFT 权重的 RLT 训练和 500 回合增益测量尚未进行，不宣称已提高成功率。
+2026-09-27 已接入真实官方 100k HF SFT 权重：动作对齐、120 控制步的完整短流程、
+恢复与两个评测入口均通过，详见 [HF 对齐验证](smolvla_rlt_hf.md#对齐验证)。
+正式 RLT 训练和 500 回合增益测量尚未进行，不宣称已提高成功率。

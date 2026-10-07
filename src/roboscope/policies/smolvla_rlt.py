@@ -26,6 +26,13 @@ def image_features_from_prefix(features, valid, attention, language_length):
 
 
 def load_sft(cfg, manifest, device):
+    if cfg.get("sft_backend") == "hf_native":
+        from roboscope.data.smolvla_hf import verify_contract
+        from roboscope.policies.smolvla_hf import HFSmolVLAPolicy
+
+        verify_contract(cfg, manifest)
+        return HFSmolVLAPolicy(cfg["sft_checkpoint"], manifest, device).eval().requires_grad_(False)
+
     from roboscope.runtime.training import manifest_digest
 
     path = cfg["sft_checkpoint"]
@@ -112,6 +119,7 @@ class RLTPolicy(nn.Module):
         self.token, self.actor, self.cfg = token, actor, cfg
         self.register_buffer("state_mean", torch.tensor(manifest["state_mean"], dtype=torch.float32))
         self.register_buffer("state_std", torch.tensor(manifest["state_std"], dtype=torch.float32))
+        self.state_eps = manifest.get("state_eps", 0.0)
 
     @torch.no_grad()
     def describe(self, batch, noise=None):
@@ -136,9 +144,9 @@ class RLTPolicy(nn.Module):
         # The small trainable modules stay FP32, independently of VLA autocast.
         with torch.autocast(device.type, enabled=False):
             token = self.token.encode(features, image_valid)
-            state = (batch["state"].to(device).float() - self.state_mean) / self.state_std
+            state = (batch["state"].to(device).float() - self.state_mean) / (self.state_std + self.state_eps)
             # 本体状态不参与 RL token 重建；在此才与 image-only RL token 拼接，
-            # 供 actor 和 critic 共同使用。这里是归一化 9D 状态，不是 VLM state embedding。
+            # 供 actor 和 critic 使用：HF 为 8D EEF，旧版为 9D joints。
             remaining = batch.get(
                 "remaining_steps", torch.full((len(state),), self.cfg["rollout_horizon"], device=device)
             )
@@ -161,9 +169,20 @@ def build_policy(base, cfg, manifest):
         raise ValueError("RLT requires image-only token features; retrain old full-prefix token/replay")
     width = base.policy.model.vlm_with_expert.config.text_config.hidden_size
     # token_layers 是 encoder、decoder 各自的深度：默认各 2 层，共 4 个独立 block。
-    # token_dim=256、token_heads=8；与冻结 VLM 的 16 层及其 hidden_size 无关。
+    # 生产路径要求 token_dim 等于 VLM hidden_size（SmolVLM2-500M 为 960），
+    # 直接使用图像 embedding，禁止静默降维到更窄的 readout。
+    if cfg["token_dim"] != width:
+        raise ValueError(
+            f"token_dim={cfg['token_dim']} must equal VLM hidden_size={width}; "
+            "do not down-project image embeddings before the RL token"
+        )
     token = RLToken(width, cfg["token_dim"], cfg["token_layers"], cfg["token_heads"])
-    actor = Actor(cfg["token_dim"] + 10, cfg["action_horizon"], cfg["hidden_dims"], cfg["actor_std"])
+    state_dim = len(manifest["state_mean"])
+    if cfg.get("state_dim", 9) != state_dim:
+        raise ValueError("RLT state dimension differs from the SFT normalization statistics")
+    actor = Actor(
+        cfg["token_dim"] + state_dim + 1, cfg["action_horizon"], cfg["hidden_dims"], cfg["actor_std"]
+    )
     return RLTPolicy(base, token, actor, cfg, manifest)
 
 
@@ -171,6 +190,23 @@ def load_policy(checkpoint, manifest, evaluation_cfg, device):
     saved = torch.load(checkpoint, map_location="cpu", weights_only=False)
     if saved.get("format") != "roboscope.smolvla_rlt.v1":
         raise ValueError("Not a SmolVLA RLT checkpoint")
+    if saved["config"].get("sft_backend") == "hf_native":
+        from roboscope.runtime.training import manifest_digest
+
+        original = json.loads((Path(saved["config"]["output_root"]) / "manifest.json").read_text())
+        if saved["manifest_sha256"] != manifest_digest(original):
+            raise ValueError("HF RLT training manifest changed")
+
+        def identity(value):
+            return {
+                **value,
+                "tasks": [
+                    {k: v for k, v in t.items() if k != "eval_initial_state_ids"} for t in value["tasks"]
+                ],
+            }
+
+        if identity(original) != identity(manifest):
+            raise ValueError("HF RLT evaluation manifest differs beyond the initial-state schedule")
     cfg = {**saved["config"], "evaluation_policy": evaluation_cfg.get("evaluation_policy", "rlt")}
     base = load_sft(cfg, manifest, device)
     policy = build_policy(base, cfg, manifest).to(device)

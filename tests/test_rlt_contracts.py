@@ -89,6 +89,24 @@ def test_rlt_preview_and_eval_protocol(tmp_path):
         evaluation_config(tmp_path, "best", 50, 10, None)
 
 
+def test_sft_reference_single_step_execution_preserves_rlt_contract(tmp_path):
+    cfg = json.loads((ROOT / "configs/libero_spatial/smolvla_rlt_hf.json").read_text())
+    (tmp_path / "config.json").write_text(json.dumps(cfg))
+    (tmp_path / "manifest.json").write_text(json.dumps({"tasks": [{"id": i} for i in range(10)]}))
+    single, schedule, name = evaluation_config(tmp_path, "final", 50, 10, 1, True)
+    assert single["evaluation_policy"] == "sft_reference"
+    assert single["hf_eval_reset_protocol"] == "property_sampler_clear_v1"
+    assert single["action_horizon"] == 1 and name == "smolvla_reference_c001"
+    assert all(t["eval_initial_state_ids"] == list(range(50)) for t in schedule["tasks"])
+    assert json.loads((tmp_path / "config.json").read_text())["action_horizon"] == 10
+    with pytest.raises(ValueError, match="trained action horizon"):
+        evaluation_config(tmp_path, "final", 50, 10, 1)
+    with pytest.raises(ValueError, match="execution horizon"):
+        evaluation_config(tmp_path, "final", 50, 10, 50, True)
+    with pytest.raises(ValueError, match="DDIM"):
+        evaluation_config(tmp_path, "final", 50, 5, 1, True)
+
+
 @pytest.mark.parametrize(
     "change",
     [

@@ -67,6 +67,8 @@ Same seed 0, ten tasks, 50 fixed initial states per task, two RGB cameras, 7D OS
 
 **Other SmolVLA paths, without a final independent benchmark:** the HDF5 recipe still targets the shared ACT/DP evaluator ([smolvla_spatial.md](docs/smolvla_spatial.md)). RLT post-training adds a learned RL token and a Gaussian actor/twin critic on frozen SFT features, executes 10 steps, and keeps a matched 10-step SFT control ([smolvla_rlt_spatial.md](docs/smolvla_rlt_spatial.md)). RLT is now in online training: the 2026-09-28 record has 352 online episodes, 273 successes (77.6%), and 55,630 accumulated environment steps. This is training rollout SR; independent benchmark SR and gains over SFT remain unmeasured. Preview with `bash scripts/posttrain_smolvla_rlt_spatial.sh --preview`.
 
+New RLT runs default to the native HF Spatial SmolVLA checkpoint, its saved processors, 256px RGB, 8D EEF state, and hf-libero 0.1.4 / MuJoCo 3.3.2. See the [HF alignment contract](docs/smolvla_rlt_hf.md). Historical HDF5 recipes remain available for reproducing old runs.
+
 Run the stages separately with `--stage token`, `--stage warmup`, `--stage online`, and `--stage evaluate`. Freeze the RL token before collecting feature replay; online learning continues collecting new rollouts. See the [step-by-step commands](docs/smolvla_rlt_spatial.md#按阶段执行).
 
 **Not implemented:** PPO, asynchronous/RTC inference, and ManiSkill/RoboCasa. These are [planned extensions](docs/roadmap.md), not current benchmark claims. Checkpoints and demonstration data are not bundled.

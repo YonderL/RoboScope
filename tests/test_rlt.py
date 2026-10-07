@@ -62,6 +62,7 @@ def test_image_feature_selection_excludes_language_state_and_padding(language_le
 
 def test_rl_token_bottleneck_and_causal_decoder():
     torch.set_num_threads(2)
+    # Narrow width keeps Linear projections for unit-test bottlenecks only.
     model = RLToken(12, 16, 1, 4)
     features = torch.randn(2, 7, 12, requires_grad=True)
     valid = torch.ones(2, 7, dtype=torch.bool)
@@ -80,6 +81,26 @@ def test_rl_token_bottleneck_and_causal_decoder():
     assert features.grad is None
     assert model.readout.grad.abs().sum() > 0
     assert model.input.weight.grad.abs().sum() > 0
+
+
+def test_rl_token_matching_width_skips_input_projection():
+    torch.set_num_threads(2)
+    model = RLToken(16, 16, 1, 4)
+    assert model.input is None and model.decoder_input is None
+    assert isinstance(model.output, torch.nn.Linear)
+    features = torch.randn(2, 5, 16, requires_grad=True)
+    valid = torch.ones(2, 5, dtype=torch.bool)
+    token = model.encode(features, valid)
+    assert token.shape == (2, 16)
+    original = model.reconstruct(token.detach(), features, valid)
+    future = features.detach().clone()
+    future[:, 3:] = torch.randn_like(future[:, 3:]) * 100
+    altered = model.reconstruct(token.detach(), future, valid)
+    torch.testing.assert_close(original[:, :4], altered[:, :4])
+    model(features, valid).backward()
+    assert features.grad is None
+    assert model.readout.grad.abs().sum() > 0
+    assert model.output.weight.grad.abs().sum() > 0
 
 
 def rows(success=True, episode_id=0):
@@ -339,6 +360,45 @@ def test_token_stage_resumes_and_never_updates_sft(tmp_path, monkeypatch):
         torch.testing.assert_close(value, actual["token"][key], rtol=0, atol=0)
 
 
+@pytest.mark.parametrize("failure", ["loss", "gradient"])
+def test_nonfinite_token_update_cannot_be_exported_as_completed(tmp_path, monkeypatch, failure):
+    cfg = {
+        **config(),
+        "token_steps": 1,
+        "token_save_every": 1,
+        "token_batch_size": 2,
+        "feature_batch_size": 2,
+        "workers": 0,
+        "log_every": 1,
+    }
+    monkeypatch.setattr(
+        trainer, "FrameDataset", lambda *args: [{"state": torch.ones(4)}, {"state": torch.ones(4)}]
+    )
+    monkeypatch.setattr(
+        trainer,
+        "vlm_features",
+        lambda base, batch: (batch["state"][:, None], torch.ones(2, 1, dtype=torch.bool)),
+    )
+
+    class Token(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.weight = torch.nn.Parameter(torch.tensor(1.0))
+            if failure == "gradient":
+                self.weight.register_hook(lambda grad: grad * float("nan"))
+
+        def forward(self, features, valid):
+            return self.weight * (float("nan") if failure == "loss" else 1.0)
+
+    token = Token()
+    model = SimpleNamespace(base=torch.nn.Linear(4, 4), token=token)
+    with pytest.raises((FloatingPointError, RuntimeError), match="[Nn]on.?finite"):
+        trainer.train_token(tmp_path, cfg, {}, model, torch.device("cpu"))
+    assert token.weight.item() == 1.0
+    assert not (tmp_path / "token.pt").exists()
+    assert not (tmp_path / "token_last.pt").exists()
+
+
 def check_native_smolvla_rlt(base, batch, manifest, device, tmp_path):
     """Called by the native tiny SmolVLA test on both CPU and optional CUDA."""
     from roboscope.policies.smolvla_rlt import build_policy, load_policy, vlm_features
@@ -347,6 +407,9 @@ def check_native_smolvla_rlt(base, batch, manifest, device, tmp_path):
 
     cfg = config()
     cfg["rollout_horizon"] = 600
+    # Tiny native SmolVLM uses hidden_size=32; production requires matching width.
+    cfg["token_dim"] = base.policy.model.vlm_with_expert.config.text_config.hidden_size
+    cfg["token_heads"] = 4
     base.zero_grad(set_to_none=True)
     policy = build_policy(base, cfg, manifest).to(device)
     features, valid = vlm_features(base, batch)
@@ -399,6 +462,8 @@ def check_native_smolvla_rlt(base, batch, manifest, device, tmp_path):
     assert policy.predict(batch, noise).shape == (2, 10, 7)
     with pytest.raises(ValueError, match="retrain old"):
         build_policy(base, {k: v for k, v in cfg.items() if k != "token_features"}, manifest)
+    with pytest.raises(ValueError, match="must equal VLM hidden_size"):
+        build_policy(base, {**cfg, "token_dim": max(8, cfg["token_dim"] // 2)}, manifest)
     with torch.autocast(device.type, dtype=torch.bfloat16):
         assert torch.isfinite(policy.predict(batch, noise)).all()
     saved = tmp_path / "rlt_tiny.pt"

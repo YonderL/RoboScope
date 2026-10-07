@@ -28,7 +28,7 @@ def main():
     evaluation.add_argument(
         "--rlt-reference",
         action="store_true",
-        help="Evaluate an RLT run using its frozen SFT reference at the same horizon",
+        help="Evaluate frozen SFT reference; --ta may shorten execution for replanning ablations",
     )
     evaluation.add_argument("--episodes", type=int, default=50)
     evaluation.add_argument("--task-ids", type=int, nargs="+", help="Task IDs in the saved training manifest")

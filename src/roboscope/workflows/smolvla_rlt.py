@@ -18,6 +18,34 @@ def posttrain(source, output, cfg, checkpoint="final", resume=False, stage="all"
     source, output = Path(source).resolve(), Path(output).resolve()
     if source == output:
         raise ValueError("RLT must use a separate output directory from SFT")
+    if cfg.get("sft_backend") == "hf_native":
+        from roboscope.data.smolvla_hf import prepare_contract
+
+        cfg, manifest = prepare_contract(source, cfg, checkpoint)
+        cfg["output_root"] = str(output)
+        lock = lock_run(output)
+        try:
+            save_contract(output, cfg, manifest, resume)
+            cards, envs = cards_and_envs(cfg["gpu_model"])
+            save_json(output / "gpu_mapping.json", cards)
+            command = [
+                sys.executable,
+                "-m",
+                "roboscope.trainers.smolvla_rlt",
+                "--run",
+                str(output),
+                "--stage",
+                stage,
+            ]
+            if resume:
+                command.append("--resume")
+            envs[0].update(
+                TOKENIZERS_PARALLELISM="false", HF_HUB_OFFLINE="1", HF_DATASETS_CACHE=str(output / "hf_cache")
+            )
+            run_workers([command], envs[:1], [output / f"train_{stage}.log"])
+        finally:
+            lock.close()
+        return
     source_cfg = json.loads((source / "config.json").read_text())
     if source_cfg.get("policy") != "smolvla":
         raise ValueError("--source must be a SmolVLA SFT run")

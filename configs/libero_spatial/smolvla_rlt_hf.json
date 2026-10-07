@@ -10,8 +10,11 @@
   "token_batch_size": 64,
   "token_lr": 3e-05,
   "token_save_every": 250,
-  "feature_batch_size": 4,
-  "hidden_dims": [256, 256],
+  "feature_batch_size": 16,
+  "hidden_dims": [
+    256,
+    256
+  ],
   "actor_lr": 0.0003,
   "critic_lr": 0.0003,
   "actor_std": 0.05,
@@ -29,16 +32,27 @@
   "replay_capacity": 50000,
   "replay_stride": 2,
   "rollout_seed": 1000000,
-  "rollout_horizon": 600,
-  "settle_steps": 5,
+  "rollout_horizon": 280,
+  "settle_steps": 10,
   "workers": 4,
   "cpu_threads": 4,
-  "log_every": 100,
+  "log_every": 10,
   "amp": true,
   "eval_episodes": 50,
   "eval_envs": 8,
   "eval_seed": 10000,
   "video_episodes_per_task": 1,
   "latency_warmup": 5,
-  "latency_repeats": 30
+  "latency_repeats": 30,
+  "sft_backend": "hf_native",
+  "environment_backend": "hf_libero",
+  "state_dim": 8,
+  "image_size": 256,
+  "gpu_model": "pro5000",
+  "environment_versions": {
+    "hf-libero": "0.1.4",
+    "mujoco": "3.3.2",
+    "robosuite": "1.4.0",
+    "lerobot": "0.6.1"
+  }
 }

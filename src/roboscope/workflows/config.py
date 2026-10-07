@@ -90,6 +90,25 @@ def validate_smolvla(cfg):
 
 
 def validate_rlt(cfg):
+    from roboscope.rl.rewards import validate_reward
+
+    validate_reward(cfg)
+    if cfg.get("sft_backend") == "hf_native":
+        if (cfg.get("environment_backend"), cfg.get("state_dim"), cfg.get("image_size")) != (
+            "hf_libero",
+            8,
+            256,
+        ):
+            raise ValueError("HF RLT requires hf-libero, 8D EEF state and 256px RGB")
+        if cfg.get("environment_versions") != {
+            "hf-libero": "0.1.4",
+            "mujoco": "3.3.2",
+            "robosuite": "1.4.0",
+            "lerobot": "0.6.1",
+        }:
+            raise ValueError("HF RLT requires the pinned hf-libero / MuJoCo 3.3.2 runtime")
+        if cfg.get("gpu_model") not in ("4090", "5880", "pro5000"):
+            raise ValueError("HF RLT requires an explicit GPU model")
     if cfg.get("policy") != "smolvla_rlt":
         raise ValueError("posttrain requires policy=smolvla_rlt")
     if cfg.get("token_features") != "vlm_image_tokens":

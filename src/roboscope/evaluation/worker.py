@@ -69,10 +69,16 @@ def latency(model, variant, cfg, manifest, cache):
     不把 8 环境 batch 的摊销时间冒充单机器人 latency。不含图像获取/网络/仿真。
     每次是完整 chunk 生成，不除以 Ta；热身后同步测 wall-clock p50/p95。
     """
-    ds = SequenceDataset(manifest, "val", cache)
+    hf_native = cfg.get("sft_backend") == "hf_native"
+    if hf_native:
+        from roboscope.data.smolvla_hf import HFSpatialFrames
+
+        ds = HFSpatialFrames(manifest)
+    else:
+        ds = SequenceDataset(manifest, "val", cache)
     sample = ds[0]
     batch = {k: v.unsqueeze(0).cuda() for k, v in sample.items() if k not in ("action", "action_is_pad")}
-    if variant["model"] != "dp":
+    if variant["model"] != "dp" and not hf_native:
         for key in ("state", *CAMERAS):
             batch[key] = batch[key][:, -1]
     times = []
@@ -154,6 +160,8 @@ def rollout(model, cfg, env_cfg, jobs, variant, target, callback):
                 item["history"].append(obs)
                 if item["phase"] == "reset":
                     item["history"].append(obs)
+                    if env_cfg.get("hf_eval_reset_protocol"):
+                        item["reset_state_sha256"] = obs["reset_state_sha256"]
                 if item["phase"] == "step" and (success or item["steps"] >= cfg["rollout_horizon"]):
                     item["states"].append(obs["state"])
                     item["eef"].append(obs["eef_pos"])
@@ -194,6 +202,11 @@ def rollout(model, cfg, env_cfg, jobs, variant, target, callback):
                         "trace": str(trace),
                         "eval_seed": cfg["eval_seed"] + item["task"]["id"] * 1000 + item["initial_id"],
                     }
+                    if env_cfg.get("hf_eval_reset_protocol"):
+                        result.update(
+                            reset_protocol=env_cfg["hf_eval_reset_protocol"],
+                            reset_state_sha256=item["reset_state_sha256"],
+                        )
                     callback(result)
                     completed += 1
                     assign(slot)
@@ -259,7 +272,7 @@ def main():
     p.add_argument("--shard", type=int, choices=[0, 1], required=True)
     a = p.parse_args()
     cfg = load_config(a.run / "config.json")
-    require_gpu(cfg.get("evaluation_gpu_model", "4090"))
+    require_gpu(cfg.get("evaluation_gpu_model", cfg.get("gpu_model", "4090")))
     torch.set_num_threads(cfg["cpu_threads"])
     torch.use_deterministic_algorithms(True)
     seed_all(cfg["seed"])
@@ -285,6 +298,7 @@ def main():
     save_json(target / "config.json", metadata)
     records = []
     raw = target / "episodes.jsonl"
+    raw.touch(exist_ok=True)
     if raw.exists():
         for line in raw.read_text().splitlines():
             try:
