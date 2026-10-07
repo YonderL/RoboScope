@@ -1,0 +1,282 @@
+{
+  "schema_version": 1,
+  "benchmark": "LIBERO-Spatial",
+  "evaluation_protocol": {
+    "training_seed": 0,
+    "episodes_per_task": 50,
+    "tasks": 10,
+    "execution_horizon": 10,
+    "episode_limit_control_steps": 280,
+    "reset_protocol": "property_sampler_clear_v1",
+    "environment_versions": {
+      "hf-libero": "0.1.4",
+      "mujoco": "3.3.2",
+      "robosuite": "1.4.0",
+      "lerobot": "0.6.1"
+    },
+    "tasks_reused_from_archived_evaluations": [
+      0,
+      1,
+      2,
+      3,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "task_rerun_with_corrected_reset": 4,
+    "task_4_physical_initial_states_match_across_conditions": true,
+    "comparison_note": "The same 50 task-4 physical initial states were used for SFT, sparse RLT, and progress RLT; other tasks reuse archived evaluations."
+  },
+  "training": {
+    "sft_checkpoint_step": 100000,
+    "rlt_checkpoint_environment_steps": 100044,
+    "rlt_checkpoint_learner_updates": 237155,
+    "rlt_training_episodes": 774,
+    "warmup_episodes": 43,
+    "warmup_environment_steps": 6003,
+    "token_updates": 10000,
+    "reward": {
+      "mode": "grasp_progress_v1",
+      "grasp_confirmation_steps": 3,
+      "scale": 0.1,
+      "reach_weight": 0.15,
+      "grasp_weight": 0.65,
+      "transport_weight": 0.2,
+      "reach_distance_m": 0.1,
+      "transport_distance_m": 0.2,
+      "max_grasp_distance_m": 0.12
+    }
+  },
+  "methods": {
+    "sft_c10": {
+      "successes": 442,
+      "episodes": 500,
+      "success_rate": 0.884,
+      "checkpoint_sha256": "00e97bf8074a70e4bf53a474d99c6e105c52dffd09a10655614297ffc2fe4b83"
+    },
+    "sparse_rlt_c10": {
+      "successes": 437,
+      "episodes": 500,
+      "success_rate": 0.874,
+      "checkpoint_sha256": "4a22ecc36bc048f1e4d1a76800a884fb79dc55f6f87e1ad85ecbeb6f2a562bce"
+    },
+    "progress_rlt_c10": {
+      "successes": 462,
+      "episodes": 500,
+      "success_rate": 0.924,
+      "checkpoint_sha256": "5ac7b8745c1bd594207b4d56059b9902c2fadb101073873e04269582f5441caa"
+    }
+  },
+  "overall": {
+    "sft": {
+      "successes": 442,
+      "episodes": 500,
+      "success_rate": 0.884
+    },
+    "sparse_rlt": {
+      "successes": 437,
+      "episodes": 500,
+      "success_rate": 0.874
+    },
+    "progress_rlt": {
+      "successes": 462,
+      "episodes": 500,
+      "success_rate": 0.924
+    }
+  },
+  "tasks": [
+    {
+      "task_id": 0,
+      "task_name": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate",
+      "sft": {
+        "successes": 48,
+        "episodes": 50,
+        "success_rate": 0.96
+      },
+      "sparse_rlt": {
+        "successes": 46,
+        "episodes": 50,
+        "success_rate": 0.92
+      },
+      "progress_rlt": {
+        "successes": 48,
+        "episodes": 50,
+        "success_rate": 0.96
+      }
+    },
+    {
+      "task_id": 1,
+      "task_name": "pick_up_the_black_bowl_next_to_the_ramekin_and_place_it_on_the_plate",
+      "sft": {
+        "successes": 46,
+        "episodes": 50,
+        "success_rate": 0.92
+      },
+      "sparse_rlt": {
+        "successes": 49,
+        "episodes": 50,
+        "success_rate": 0.98
+      },
+      "progress_rlt": {
+        "successes": 47,
+        "episodes": 50,
+        "success_rate": 0.94
+      }
+    },
+    {
+      "task_id": 2,
+      "task_name": "pick_up_the_black_bowl_from_table_center_and_place_it_on_the_plate",
+      "sft": {
+        "successes": 49,
+        "episodes": 50,
+        "success_rate": 0.98
+      },
+      "sparse_rlt": {
+        "successes": 47,
+        "episodes": 50,
+        "success_rate": 0.94
+      },
+      "progress_rlt": {
+        "successes": 49,
+        "episodes": 50,
+        "success_rate": 0.98
+      }
+    },
+    {
+      "task_id": 3,
+      "task_name": "pick_up_the_black_bowl_on_the_cookie_box_and_place_it_on_the_plate",
+      "sft": {
+        "successes": 44,
+        "episodes": 50,
+        "success_rate": 0.88
+      },
+      "sparse_rlt": {
+        "successes": 47,
+        "episodes": 50,
+        "success_rate": 0.94
+      },
+      "progress_rlt": {
+        "successes": 49,
+        "episodes": 50,
+        "success_rate": 0.98
+      }
+    },
+    {
+      "task_id": 4,
+      "task_name": "pick_up_the_black_bowl_in_the_top_drawer_of_the_wooden_cabinet_and_place_it_on_the_plate",
+      "sft": {
+        "successes": 41,
+        "episodes": 50,
+        "success_rate": 0.82
+      },
+      "sparse_rlt": {
+        "successes": 42,
+        "episodes": 50,
+        "success_rate": 0.84
+      },
+      "progress_rlt": {
+        "successes": 45,
+        "episodes": 50,
+        "success_rate": 0.9
+      }
+    },
+    {
+      "task_id": 5,
+      "task_name": "pick_up_the_black_bowl_on_the_ramekin_and_place_it_on_the_plate",
+      "sft": {
+        "successes": 42,
+        "episodes": 50,
+        "success_rate": 0.84
+      },
+      "sparse_rlt": {
+        "successes": 43,
+        "episodes": 50,
+        "success_rate": 0.86
+      },
+      "progress_rlt": {
+        "successes": 44,
+        "episodes": 50,
+        "success_rate": 0.88
+      }
+    },
+    {
+      "task_id": 6,
+      "task_name": "pick_up_the_black_bowl_next_to_the_cookie_box_and_place_it_on_the_plate",
+      "sft": {
+        "successes": 50,
+        "episodes": 50,
+        "success_rate": 1.0
+      },
+      "sparse_rlt": {
+        "successes": 45,
+        "episodes": 50,
+        "success_rate": 0.9
+      },
+      "progress_rlt": {
+        "successes": 50,
+        "episodes": 50,
+        "success_rate": 1.0
+      }
+    },
+    {
+      "task_id": 7,
+      "task_name": "pick_up_the_black_bowl_on_the_stove_and_place_it_on_the_plate",
+      "sft": {
+        "successes": 41,
+        "episodes": 50,
+        "success_rate": 0.82
+      },
+      "sparse_rlt": {
+        "successes": 46,
+        "episodes": 50,
+        "success_rate": 0.92
+      },
+      "progress_rlt": {
+        "successes": 45,
+        "episodes": 50,
+        "success_rate": 0.9
+      }
+    },
+    {
+      "task_id": 8,
+      "task_name": "pick_up_the_black_bowl_next_to_the_plate_and_place_it_on_the_plate",
+      "sft": {
+        "successes": 39,
+        "episodes": 50,
+        "success_rate": 0.78
+      },
+      "sparse_rlt": {
+        "successes": 34,
+        "episodes": 50,
+        "success_rate": 0.68
+      },
+      "progress_rlt": {
+        "successes": 46,
+        "episodes": 50,
+        "success_rate": 0.92
+      }
+    },
+    {
+      "task_id": 9,
+      "task_name": "pick_up_the_black_bowl_on_the_wooden_cabinet_and_place_it_on_the_plate",
+      "sft": {
+        "successes": 42,
+        "episodes": 50,
+        "success_rate": 0.84
+      },
+      "sparse_rlt": {
+        "successes": 38,
+        "episodes": 50,
+        "success_rate": 0.76
+      },
+      "progress_rlt": {
+        "successes": 39,
+        "episodes": 50,
+        "success_rate": 0.78
+      }
+    }
+  ],
+  "interpretation": "Single training seed; descriptive result, not evidence of cross-seed robustness. Training rollout success is not included in these evaluation rates."
+}

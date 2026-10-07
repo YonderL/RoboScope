@@ -65,11 +65,27 @@ Same seed 0, ten tasks, 50 fixed initial states per task, two RGB cameras, 7D OS
 
 ![VLA training evidence](docs/assets/vla_training.png)
 
-**Other SmolVLA paths, without a final independent benchmark:** the HDF5 recipe still targets the shared ACT/DP evaluator ([smolvla_spatial.md](docs/smolvla_spatial.md)). RLT post-training adds a learned RL token and a Gaussian actor/twin critic on frozen SFT features, executes 10 steps, and keeps a matched 10-step SFT control ([smolvla_rlt_spatial.md](docs/smolvla_rlt_spatial.md)). RLT is now in online training: the 2026-09-28 record has 352 online episodes, 273 successes (77.6%), and 55,630 accumulated environment steps. This is training rollout SR; independent benchmark SR and gains over SFT remain unmeasured. Preview with `bash scripts/posttrain_smolvla_rlt_spatial.sh --preview`.
+## SmolVLA + RL Token post-training
 
-New RLT runs default to the native HF Spatial SmolVLA checkpoint, its saved processors, 256px RGB, 8D EEF state, and hf-libero 0.1.4 / MuJoCo 3.3.2. See the [HF alignment contract](docs/smolvla_rlt_hf.md). Historical HDF5 recipes remain available for reproducing old runs.
+RLT starts from the official 100k SmolVLA Spatial checkpoint, freezes the VLA and a learned 960D RL token, then trains a Gaussian actor and twin Q critics. The progress-reward run adds a small potential-based signal for reaching, securely grasping, and transporting the target bowl; privileged contact and geometry information is used only to calculate reward. RLT and its SFT control both execute 10 actions per policy call.
 
-Run the stages separately with `--stage token`, `--stage warmup`, `--stage online`, and `--stage evaluate`. Freeze the RL token before collecting feature replay; online learning continues collecting new rollouts. See the [step-by-step commands](docs/smolvla_rlt_spatial.md#按阶段执行).
+| LIBERO-Spatial task (native HF order) | SFT, C=10 | Sparse-reward RLT, C=10 | Progress-reward RLT, C=10 |
+|---|---:|---:|---:|
+| Between plate and ramekin | 48/50 (96%) | 46/50 (92%) | 48/50 (96%) |
+| Next to ramekin | 46/50 (92%) | 49/50 (98%) | 47/50 (94%) |
+| Table center | 49/50 (98%) | 47/50 (94%) | 49/50 (98%) |
+| On cookie box | 44/50 (88%) | 47/50 (94%) | 49/50 (98%) |
+| Top drawer | 41/50 (82%) | 42/50 (84%) | 45/50 (90%) |
+| On the ramekin | 42/50 (84%) | 43/50 (86%) | 44/50 (88%) |
+| Next to cookie box | 50/50 (100%) | 45/50 (90%) | 50/50 (100%) |
+| On the stove | 41/50 (82%) | 46/50 (92%) | 45/50 (90%) |
+| Next to plate | 39/50 (78%) | 34/50 (68%) | 46/50 (92%) |
+| On the wooden cabinet | 42/50 (84%) | 38/50 (76%) | 39/50 (78%) |
+| **Suite** | **442/500 (88.4%)** | **437/500 (87.4%)** | **462/500 (92.4%)** |
+
+The progress-reward policy is **4.0 percentage points above its matched SFT control** and **5.0 points above sparse-reward RLT** in this single-seed evaluation. The run collected 100,044 environment steps over 774 training episodes and made 237,155 learner updates; these rollout totals are training data, not the 500-episode evaluation above. All three conditions use 50 fixed initial states per task. Task 4 (top drawer) was rerun for all three after correcting the hf-libero reset protocol, with matching physical initial-state fingerprints; other tasks reuse their archived evaluations. This is a descriptive single-seed result and does not establish cross-seed robustness. [Compact per-task results, protocol, and checkpoint hashes](results/rlt_hf_spatial/summary.json) · [Progress-reward recipe](configs/libero_spatial/smolvla_rlt_hf_progress.json) · [HF input/environment contract](docs/smolvla_rlt_hf.md) · [Reward definition and validation](docs/smolvla_rlt_progress_reward.md).
+
+The default RLT recipe uses native HF Spatial weights and processors, 256px RGB, 8D EEF state, hf-libero 0.1.4 and MuJoCo 3.3.2. The old HDF5 SmolVLA recipe remains available for reproducing its historical path ([details](docs/smolvla_spatial.md)). Run RLT by stages with `--stage token`, `--stage warmup`, `--stage online`, and `--stage evaluate`; see the [step-by-step commands](docs/smolvla_rlt_spatial.md#按阶段执行).
 
 **Not implemented:** PPO, asynchronous/RTC inference, and ManiSkill/RoboCasa. These are [planned extensions](docs/roadmap.md), not current benchmark claims. Checkpoints and demonstration data are not bundled.
 

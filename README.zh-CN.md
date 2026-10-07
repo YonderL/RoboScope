@@ -42,11 +42,27 @@ ACT 是 K=8、epoch 32 的 chunk 执行。DP 是 30k final，DDIM=10、Ta=8。Sm
 
 ![VLA 训练记录](docs/assets/vla_training.png)
 
-另有两条尚未报告独立正式评测成功率的路径：走共享评测器的 HDF5 SmolVLA（[smolvla_spatial.md](docs/smolvla_spatial.md)），以及 RLT 后训练。RLT 冻结 SFT，用 RL token、Gaussian actor 和双 critic 在 LIBERO-Spatial rollout 上更新；每次执行 10 步，并保留 SFT 的 10 步对照。可用 `bash scripts/posttrain_smolvla_rlt_spatial.sh --preview` 预览，详见 [RLT 运行说明](docs/smolvla_rlt_spatial.md)。RLT 已进入在线训练；2026-09-28 的记录为 352 个在线回合、273 次成功（77.6%）、55,630 个累计环境步。这是训练过程的 rollout SR，独立正式评测和相对 SFT 的增益仍待测量。
+## SmolVLA + RL Token 后训练
 
-后续新实验统一使用 HF LIBERO。RLT 默认接入官方 SmolVLA 100k 权重，使用 checkpoint 保存的归一化参数、256px RGB 和 8D EEF 状态；环境固定为 hf-libero 0.1.4 / MuJoCo 3.3.2。见 [HF 权重与环境对齐](docs/smolvla_rlt_hf.md)。
+RLT 从官方 100k SmolVLA Spatial checkpoint 开始，冻结 VLA 和训练得到的 960 维 RL Token，再训练 Gaussian Actor 与双 Q Critic。进度奖励版本通过势函数提供接近目标、有效抓取和搬运进度信号；特权接触与几何信息只用于计算奖励，不输入策略。RLT 和 SFT 对照每次均执行 10 步。
 
-支持 [分阶段执行](docs/smolvla_rlt_spatial.md#按阶段执行)：SFT → `--stage token` → `--stage warmup` → `--stage online` → `--stage evaluate`。先冻结 RL token 再保存特征 replay；在线阶段持续采集新轨迹并更新策略。
+| LIBERO-Spatial 任务（HF 原生顺序） | SFT，C=10 | 稀疏奖励 RLT，C=10 | 进度奖励 RLT，C=10 |
+|---|---:|---:|---:|
+| 盘子和 ramekin 之间 | 48/50（96%） | 46/50（92%） | 48/50（96%） |
+| ramekin 旁边 | 46/50（92%） | 49/50（98%） | 47/50（94%） |
+| 桌面中央 | 49/50（98%） | 47/50（94%） | 49/50（98%） |
+| 饼干盒上面 | 44/50（88%） | 47/50（94%） | 49/50（98%） |
+| 木柜顶层抽屉 | 41/50（82%） | 42/50（84%） | 45/50（90%） |
+| ramekin 上面 | 42/50（84%） | 43/50（86%） | 44/50（88%） |
+| 饼干盒旁边 | 50/50（100%） | 45/50（90%） | 50/50（100%） |
+| 炉子上面 | 41/50（82%） | 46/50（92%） | 45/50（90%） |
+| 盘子旁边 | 39/50（78%） | 34/50（68%） | 46/50（92%） |
+| 木柜上面 | 42/50（84%） | 38/50（76%） | 39/50（78%） |
+| **全套** | **442/500（88.4%）** | **437/500（87.4%）** | **462/500（92.4%）** |
+
+在这次单训练 seed 的评测中，进度奖励 RLT 比匹配的 SFT 对照高 **4.0 个百分点**，比稀疏奖励 RLT 高 **5.0 个百分点**。训练共采集 100,044 个环境步、774 个回合，并进行了 237,155 次 learner 更新；这些 rollout 统计不等同于上表的 500 回合正式评测。三组每任务均评测 50 个固定初态。task 4（木柜顶层抽屉）在修正 hf-libero reset 协议后对三组各重测 50 回合，并核对了物理初态指纹；其他任务复用已存档评测。结果仅代表单 seed，不能说明跨 seed 稳定性。[逐任务结果、协议与 checkpoint 指纹](results/rlt_hf_spatial/summary.json) · [进度奖励配置](configs/libero_spatial/smolvla_rlt_hf_progress.json) · [HF 权重与环境对齐](docs/smolvla_rlt_hf.md) · [奖励定义和验证](docs/smolvla_rlt_progress_reward.md)。
+
+RLT 默认使用官方 HF Spatial 权重和 processor、256px RGB、8D EEF 状态、hf-libero 0.1.4 与 MuJoCo 3.3.2。旧 HDF5 SmolVLA 配方仍可用于复现历史路径（[说明](docs/smolvla_spatial.md)）。RLT 支持按阶段运行：`--stage token`、`--stage warmup`、`--stage online`、`--stage evaluate`，详见[分阶段命令](docs/smolvla_rlt_spatial.md#按阶段执行)。
 
 ## 历史 ACT/DP 分析（复测合并前）
 
