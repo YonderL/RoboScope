@@ -99,7 +99,7 @@ python -m pytest tests/test_results.py tests/test_native_results.py tests/test_f
 
 ## SmolVLA + RLinf PPO 后训练
 
-RLinf 本地 `codex/smolvla-ppo` 分支的 SmolVLA 适配，从同一份官方 Spatial SFT 100k 权重出发完成了 100 轮 PPO 采样与更新。这是独立于上方四模型正式表和 RLT 的实验。完整 LIBERO-Spatial BF16 评测每任务使用 50 个固定初态，共 500 回合；MuJoCo 3.3.2、ODE10 采样，每次预测 50 步并执行 10 步。PPO100 成功 **449/500（89.8%）**，历史 SFT 对照成功 **442/500（88.4%）**，多 **7 回合（+1.4 个百分点）**；进度奖励 RLT 参照为 **462/500（92.4%）**。木柜顶层抽屉 task4 上，PPO100 为 **43/50**，历史 SFT 为 **41/50**，相同 BF16 模型运行时的 SFT 复测为 **42/50**。这是一组训练 seed 的描述性结果，提升幅度仍需多 seed 验证。
+[RLinf `codex/smolvla-ppo` 分支的 SmolVLA 适配](https://github.com/YonderL/RLinf/tree/codex/smolvla-ppo)，从同一份官方 Spatial SFT 100k 权重出发完成了 100 轮 PPO 采样与更新。这是独立于上方四模型正式表和 RLT 的实验。完整 LIBERO-Spatial BF16 评测每任务使用 50 个固定初态，共 500 回合；MuJoCo 3.3.2、ODE10 采样，每次预测 50 步并执行 10 步。PPO100 成功 **449/500（89.8%）**，历史 SFT 对照成功 **442/500（88.4%）**，多 **7 回合（+1.4 个百分点）**；进度奖励 RLT 参照为 **462/500（92.4%）**。木柜顶层抽屉 task4 上，PPO100 为 **43/50**，历史 SFT 为 **41/50**，相同 BF16 模型运行时的 SFT 复测为 **42/50**。这是一组训练 seed 的描述性结果，提升幅度仍需多 seed 验证。
 
 训练期间的 50 回合评测最终为 **40/50**，与该协议下 SFT 基线相同；它与上面的 500 回合固定初态评测不是同一协议。PPO 对每个动作块采样一个 Gaussian flow 转移参与优化；最终评测则在 Gaussian 初始 latent 后使用 ODE 求解。参数、训练细节、运行时限制和复现说明见 [PPO 实验记录](docs/smolvla_ppo_spatial.md)，逐回合轻量记录见 [结果目录](results/smolvla_ppo_spatial/summary.json)，Spatial 的 RLinf 覆盖配置见 [配置文件](configs/rlinf/smolvla_ppo_spatial.yaml)。仓库不包含模型权重、原始轨迹或 benchmark 数据。
 

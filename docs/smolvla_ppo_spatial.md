@@ -1,6 +1,6 @@
 # SmolVLA PPO on LIBERO-Spatial through RLinf
 
-This experiment starts from the official Spatial SmolVLA SFT 100k checkpoint and trains the RLinf SmolVLA adapter for 100 rollout/update iterations. The adapter source belongs to the separate RLinf repository; RoboScope publishes the portable Spatial override and compact evaluation evidence. It is distinct from the frozen-VLA RLT experiment and from the four-policy official comparison.
+This experiment starts from the official Spatial SmolVLA SFT 100k checkpoint and trains the [RLinf SmolVLA adapter](https://github.com/YonderL/RLinf/tree/codex/smolvla-ppo) for 100 rollout/update iterations. The published adapter commit is `fe76c7bb7e9c23ff685284b553f8a3d8f0698bd3`; RoboScope publishes the portable Spatial override and compact evaluation evidence. It is distinct from the frozen-VLA RLT experiment and from the four-policy official comparison.
 
 ## Reproduce the training configuration
 
