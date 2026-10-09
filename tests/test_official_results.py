@@ -2,6 +2,7 @@
 
 import csv
 import json
+import re
 import shutil
 from pathlib import Path
 
@@ -39,13 +40,21 @@ def test_published_official_table_is_reproducible():
 
 
 @pytest.mark.parametrize("readme", ["README.md", "README.zh-CN.md"])
-def test_readme_percentages_match_episode_counts(readme):
+def test_readme_suite_totals_match_official_selection(readme):
     text = (ROOT / readme).read_text()
-    table = [line for line in text.splitlines() if line.startswith("| ") and "% (" in line]
-    assert len(table) == 10
-    for task_id, line in enumerate(table):
-        cells = [cell.strip() for cell in line.split("|")[2:-1]]
-        assert cells == [f"{EXPECTED[p][task_id] * 2}% ({EXPECTED[p][task_id]}/50)" for p in EXPECTED]
+    summary = json.loads((ROOT / "results/official_spatial/summary.json").read_text())
+    for label, policy in (
+        ("ACT", "act"),
+        ("Diffusion Policy", "dp"),
+        ("SmolVLA", "smolvla"),
+        ("Pi-0 LoRA", "pi0"),
+    ):
+        total = summary["totals"][policy]
+        row = (
+            rf"\|\s*{re.escape(label)}[^|\n]*\|\s*{total['successes']}/500\s*\|"
+            rf"\s*\*\*{total['success_rate_percent']:.1f}%\*\*"
+        )
+        assert re.search(row, text), (readme, label)
 
 
 @pytest.mark.parametrize("damage", ["duplicate", "wrong_task_name", "wrong_checkpoint"])
