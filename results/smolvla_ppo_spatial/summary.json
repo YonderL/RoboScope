@@ -1,0 +1,146 @@
+{
+  "study": "SmolVLA SFT100k to RLinf PPO100 on LIBERO-Spatial",
+  "checkpoint_sha256": "61aa2582f17165768c653191ad4c7095bab1a660dda7658f24e71069b5026b3c",
+  "protocol": {
+    "mujoco": "3.3.2",
+    "episodes_per_task": 50,
+    "bf16": true,
+    "reset_protocol": "property_sampler_clear_v1",
+    "sampler": "ODE10",
+    "action_horizon": 10,
+    "episode_limit_control_steps": 280,
+    "hf_libero": "0.1.4",
+    "robosuite": "1.4.0",
+    "model_lerobot": "0.4.4",
+    "model_transformers": "4.57.6",
+    "training_seed": 42
+  },
+  "training": {
+    "completed_iterations": 100,
+    "training_eval_episodes_per_check": 50,
+    "training_eval_final_successes": 40,
+    "same_protocol_sft_baseline_successes": 40,
+    "eval_curve": "training_eval.csv",
+    "ppo_actor_lr": 1e-07,
+    "value_lr": 0.0001,
+    "global_batch_size": 40,
+    "micro_batch_size": 2,
+    "ppo_epochs": 2
+  },
+  "evaluation": {
+    "episodes": 500,
+    "ppo_successes": 449,
+    "historical_sft_successes": 442,
+    "historical_progress_rlt_successes": 462,
+    "episode_records": "episodes.csv",
+    "archived_rlt_physical_initial_states_matched": 500,
+    "tasks": [
+      {
+        "task_id": 0,
+        "task_name": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate",
+        "episodes": 50,
+        "ppo_successes": 49,
+        "ppo_success_rate": 0.98,
+        "sft_successes": 48,
+        "sft_success_rate": 0.96,
+        "delta_successes": 1
+      },
+      {
+        "task_id": 1,
+        "task_name": "pick_up_the_black_bowl_next_to_the_ramekin_and_place_it_on_the_plate",
+        "episodes": 50,
+        "ppo_successes": 47,
+        "ppo_success_rate": 0.94,
+        "sft_successes": 46,
+        "sft_success_rate": 0.92,
+        "delta_successes": 1
+      },
+      {
+        "task_id": 2,
+        "task_name": "pick_up_the_black_bowl_from_table_center_and_place_it_on_the_plate",
+        "episodes": 50,
+        "ppo_successes": 49,
+        "ppo_success_rate": 0.98,
+        "sft_successes": 49,
+        "sft_success_rate": 0.98,
+        "delta_successes": 0
+      },
+      {
+        "task_id": 3,
+        "task_name": "pick_up_the_black_bowl_on_the_cookie_box_and_place_it_on_the_plate",
+        "episodes": 50,
+        "ppo_successes": 42,
+        "ppo_success_rate": 0.84,
+        "sft_successes": 44,
+        "sft_success_rate": 0.88,
+        "delta_successes": -2
+      },
+      {
+        "task_id": 4,
+        "task_name": "pick_up_the_black_bowl_in_the_top_drawer_of_the_wooden_cabinet_and_place_it_on_the_plate",
+        "episodes": 50,
+        "ppo_successes": 43,
+        "ppo_success_rate": 0.86,
+        "sft_successes": 41,
+        "sft_success_rate": 0.82,
+        "delta_successes": 2
+      },
+      {
+        "task_id": 5,
+        "task_name": "pick_up_the_black_bowl_on_the_ramekin_and_place_it_on_the_plate",
+        "episodes": 50,
+        "ppo_successes": 45,
+        "ppo_success_rate": 0.9,
+        "sft_successes": 42,
+        "sft_success_rate": 0.84,
+        "delta_successes": 3
+      },
+      {
+        "task_id": 6,
+        "task_name": "pick_up_the_black_bowl_next_to_the_cookie_box_and_place_it_on_the_plate",
+        "episodes": 50,
+        "ppo_successes": 49,
+        "ppo_success_rate": 0.98,
+        "sft_successes": 50,
+        "sft_success_rate": 1.0,
+        "delta_successes": -1
+      },
+      {
+        "task_id": 7,
+        "task_name": "pick_up_the_black_bowl_on_the_stove_and_place_it_on_the_plate",
+        "episodes": 50,
+        "ppo_successes": 43,
+        "ppo_success_rate": 0.86,
+        "sft_successes": 41,
+        "sft_success_rate": 0.82,
+        "delta_successes": 2
+      },
+      {
+        "task_id": 8,
+        "task_name": "pick_up_the_black_bowl_next_to_the_plate_and_place_it_on_the_plate",
+        "episodes": 50,
+        "ppo_successes": 38,
+        "ppo_success_rate": 0.76,
+        "sft_successes": 39,
+        "sft_success_rate": 0.78,
+        "delta_successes": -1
+      },
+      {
+        "task_id": 9,
+        "task_name": "pick_up_the_black_bowl_on_the_wooden_cabinet_and_place_it_on_the_plate",
+        "episodes": 50,
+        "ppo_successes": 44,
+        "ppo_success_rate": 0.88,
+        "sft_successes": 42,
+        "sft_success_rate": 0.84,
+        "delta_successes": 2
+      }
+    ]
+  },
+  "notes": [
+    "Historical SFT and RLT used LeRobot 0.6.1 / Transformers 5.5.4; task4 same-BF16-runtime SFT control was 42/50 vs PPO 43/50.",
+    "The 50-episode training evaluation is a different protocol from the fixed-init 500-episode evaluation.",
+    "Single training seed; the observed +7/500 vs historical SFT is descriptive, not a cross-seed estimate.",
+    "No model weights or simulation traces are included."
+  ]
+}

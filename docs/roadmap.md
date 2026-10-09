@@ -6,7 +6,8 @@
 | Package migration | Implemented; bounded validation | No dependency on local experiment scripts; model/data parity checks; source release builds |
 | Stronger evaluation protocol | Planned | Fixed batch replay check, failure annotations, development/test initial-state separation, additional training seeds |
 | Pi-0 LoRA supervised fine-tuning | Pipeline implemented; pretrained full-run validation pending asset download | [Two-4090 runbook](pi0_lora_spatial.md); real language inputs, separate EEF state adapter, resumable DDP and fixed-init evaluation; no measured baseline claimed |
-| SmolVLA RLT post-training | Implemented; unit and bounded GPU/LIBERO validation; full training pending | [RLT runbook](smolvla_rlt_spatial.md); frozen SFT, learned readout, direct Gaussian actor/twin critic, rollout replay and resumable training; matched C=10 SFT/RLT evaluation, no measured gain claimed |
+| SmolVLA RLT post-training | Implemented; full Spatial training and fixed-init evaluation completed | [RLT results](../results/rlt_hf_spatial/summary.json) and [runbook](smolvla_rlt_spatial.md); progress-reward RLT 462/500 versus SFT 442/500 in one training seed |
+| SmolVLA PPO via RLinf | Adapter and one 100-iteration Spatial run completed; external RLinf code path | [PPO experiment](smolvla_ppo_spatial.md), 500 fixed-init BF16 evaluation and portable per-episode records; multi-seed and same-runtime full SFT control remain open |
 | ManiSkill3 / RoboCasa | Planned | Benchmark-specific adapters and documented equivalence boundaries, independent reproducible baseline |
 | Agentic manipulation / RTC | Planned | High-level skill contract, verification/replanning tests, actual asynchronous latency/robustness study |
 
